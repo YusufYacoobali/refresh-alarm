@@ -1,25 +1,39 @@
 {
   "expo": {
-    "name": "alarm",
-    "slug": "alarm",
+    "name": "Daybreak",
+    "slug": "daybreak-alarm",
+    "scheme": "daybreak",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/art/moon.png",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.daybreak.alarm",
+      "infoPlist": {
+        "NSAlarmKitUsageDescription": "Daybreak uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
+        "NSMotionUsageDescription": "Daybreak uses motion only during your shake-to-wake challenge.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
+      "package": "com.daybreak.alarm",
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/art/moon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      ["expo-notifications", { "color": "#BDB0F5" }],
+      "expo-sensors"
+    ]
   }
 }

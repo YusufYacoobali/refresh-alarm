@@ -1,0 +1,258 @@
+import React, { useEffect, useState } from "react";
+import { View, Platform } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  T,
+  Screen,
+  Heading,
+  CircleButton,
+  Enter,
+  Card,
+  Button,
+  Quote,
+  Tap,
+  Icon,
+  SoundArt,
+} from "@/components/ui";
+import { AlarmCard } from "@/components/alarm-card";
+import { colors as c, art } from "@/theme";
+import { useApp, newAlarm } from "@/state/app-state";
+import { nextOccurrence, timeUntil } from "@/utils/alarms";
+export function Home() {
+  const { data, edit } = useApp(),
+    insets = useSafeAreaInsets();
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const alarm = [...data.alarms]
+    .filter((a) => a.enabled)
+    .sort((a, b) => +nextOccurrence(a, now) - +nextOccurrence(b, now))[0];
+  const greeting =
+    now.getHours() < 12
+      ? "Good morning"
+      : now.getHours() < 18
+        ? "Good afternoon"
+        : "Good evening";
+  return (
+    <Screen style={{ paddingTop: insets.top + 28, gap: 22 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Icon name="sunny-outline" size={17} color={c.peach} />
+          <T variant="eyebrow" style={{ color: c.peach }}>
+            DAYBREAK
+          </T>
+        </View>
+        <Tap onPress={() => router.push("/settings")} label="Open settings">
+          <Icon name="options-outline" size={22} color={c.muted} />
+        </Tap>
+      </View>
+      <Heading
+        title={`${greeting},`}
+        subtitle={
+          now.getHours() < 18
+            ? "A new day. A little more possibility."
+            : "Rest well. Big things tomorrow."
+        }
+        right={
+          <CircleButton
+            icon="add"
+            label="Create alarm"
+            onPress={() => {
+              edit();
+              router.push("/alarm");
+            }}
+          />
+        }
+      />
+      <Enter>
+        {alarm ? (
+          <AlarmCard alarm={alarm} featured />
+        ) : (
+          <Card style={{ padding: 22, gap: 14 }}>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <T variant="small" style={{ color: c.lavender }}>
+                YOUR NEXT CHAPTER
+              </T>
+              <Icon name="alarm-outline" size={19} />
+            </View>
+            <T variant="heading">Good mornings start here.</T>
+            <T style={{ color: c.muted }}>
+              Choose a time. We’ll bring a little light.
+            </T>
+            <Button
+              title="Set your first alarm"
+              onPress={() => {
+                edit();
+                router.push("/alarm");
+              }}
+              icon="add"
+            />
+          </Card>
+        )}
+      </Enter>
+      {alarm && (
+        <View
+          style={{ flexDirection: "row", justifyContent: "center", gap: 6 }}
+        >
+          <Icon name="moon-outline" size={14} color={c.faint} />
+          <T variant="small" style={{ color: c.muted }}>
+            {data.snoozed
+              ? `Snoozing · ${timeUntil(new Date(data.snoozed.at), now)} to go`
+              : `${timeUntil(nextOccurrence(alarm, now), now)} until your next little beginning`}
+          </T>
+        </View>
+      )}
+      <View
+        style={{
+          height: 285,
+          marginHorizontal: -24,
+          marginTop: -4,
+          marginBottom: -8,
+          overflow: "hidden",
+        }}
+      >
+        {data.theme === "serene" ? (
+          <Image
+            source={art.home}
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 285,
+            }}
+            contentFit="cover"
+            contentPosition="bottom"
+          />
+        ) : data.theme === "moonlight" ? (
+          <Image
+            source={art.moon}
+            style={{ width: "100%", height: 360, marginTop: -40 }}
+            contentFit="cover"
+          />
+        ) : (
+          <SoundArt tile={2} style={{ width: "100%", marginTop: -100 }} />
+        )}
+        <LinearGradient
+          colors={[c.bg, "transparent", "transparent", c.bg]}
+          locations={[0, 0.15, 0.78, 1]}
+          style={{ position: "absolute", inset: 0 }}
+        />
+        <Tap
+          onPress={() => router.push("/themes")}
+          label="Change your landscape"
+          style={{ position: "absolute", bottom: 20, right: 24 }}
+        >
+          <View
+            style={{
+              width: 35,
+              height: 35,
+              borderRadius: 18,
+              backgroundColor: "#101426AC",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name="color-palette-outline" size={16} color={c.text} />
+          </View>
+        </Tap>
+      </View>
+      <Quote />
+      <Tap
+        onPress={() =>
+          router.push({
+            pathname: "/ringing",
+            params: { id: alarm?.id ?? "demo", preview: "1" },
+          })
+        }
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
+          }}
+        >
+          <Icon name="play-circle-outline" size={17} color={c.faint} />
+          <T variant="small" style={{ color: c.muted }}>
+            Try your morning experience
+          </T>
+        </View>
+      </Tap>
+      {Platform.OS === "web" && (
+        <T
+          variant="small"
+          style={{ color: c.faint, textAlign: "center", fontSize: 10 }}
+        >
+          Browser preview · Keep this page open for demo alarms.
+        </T>
+      )}
+    </Screen>
+  );
+}
+export function Alarms() {
+  const { data, edit } = useApp();
+  const insets = useSafeAreaInsets();
+  return (
+    <Screen style={{ paddingTop: insets.top + 28 }}>
+      <T variant="eyebrow" style={{ color: c.peach }}>
+        A LITTLE STRUCTURE. A SOFTER START.
+      </T>
+      <Heading
+        title="Your mornings"
+        subtitle={`${data.alarms.filter((a) => a.enabled).length} active · All in your own time`}
+        right={
+          <CircleButton
+            icon="add"
+            label="Add alarm"
+            onPress={() => {
+              edit();
+              router.push("/alarm");
+            }}
+          />
+        }
+      />
+      {data.alarms.length ? (
+        data.alarms.map((alarm) => <AlarmCard key={alarm.id} alarm={alarm} />)
+      ) : (
+        <>
+          <Image
+            source={art.moon}
+            style={{ height: 280, width: "100%" }}
+            contentFit="contain"
+          />
+          <T variant="heading" style={{ textAlign: "center" }}>
+            A fresh start awaits.
+          </T>
+          <T style={{ color: c.muted, textAlign: "center" }}>
+            Your alarms will live here. Let’s make your first morning a good
+            one.
+          </T>
+          <Button
+            title="Create an alarm"
+            onPress={() => {
+              edit();
+              router.push("/alarm");
+            }}
+            icon="add"
+          />
+        </>
+      )}
+      <Quote text="You don’t have to do it all. Just begin." />
+    </Screen>
+  );
+}
