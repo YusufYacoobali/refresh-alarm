@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   T,
@@ -21,6 +21,8 @@ import { AlarmCard } from "@/components/alarm-card";
 import { colors as c, art } from "@/theme";
 import { useApp, newAlarm } from "@/state/app-state";
 import { nextOccurrence, timeUntil } from "@/utils/alarms";
+import { Float } from "@/components/motion";
+import { ClayMotion } from "@/components/clay-motion";
 export function Home() {
   const { data, edit } = useApp(),
     insets = useSafeAreaInsets();
@@ -50,7 +52,7 @@ export function Home() {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
           <Icon name="sunny-outline" size={17} color={c.peach} />
           <T variant="eyebrow" style={{ color: c.peach }}>
-            DAYBREAK
+            REFRESH
           </T>
         </View>
         <Tap onPress={() => router.push("/settings")} label="Open settings">
@@ -124,7 +126,7 @@ export function Home() {
           overflow: "hidden",
         }}
       >
-        {data.theme === "serene" ? (
+        <Float style={{ position: "absolute", inset: -5 }} distance={5}>{data.theme === "serene" ? (
           <Image
             source={art.home}
             style={{
@@ -145,12 +147,13 @@ export function Home() {
           />
         ) : (
           <SoundArt tile={2} style={{ width: "100%", marginTop: -100 }} />
-        )}
+        )}</Float>
         <LinearGradient
           colors={[c.bg, "transparent", "transparent", c.bg]}
           locations={[0, 0.15, 0.78, 1]}
           style={{ position: "absolute", inset: 0 }}
         />
+        <ClayMotion name="stars" size={320} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
         <Tap
           onPress={() => router.push("/themes")}
           label="Change your landscape"
@@ -205,10 +208,12 @@ export function Home() {
   );
 }
 export function Alarms() {
+  const { saved } = useLocalSearchParams<{ saved?: string }>();
   const { data, edit } = useApp();
   const insets = useSafeAreaInsets();
   return (
     <Screen style={{ paddingTop: insets.top + 28 }}>
+      {saved && data.alarms.some(a => a.id === saved) && <Card style={{ padding: 16, borderColor: c.green, flexDirection: "row", gap: 10, alignItems: "center" }}><Icon name="checkmark-circle" color={c.green} /><T accessibilityLiveRegion="polite" style={{ flex: 1 }}>Alarm saved. You’re all set.</T><Tap label="Dismiss saved confirmation" onPress={() => router.setParams({ saved: undefined })}><Icon name="close" size={18} /></Tap></Card>}
       <T variant="eyebrow" style={{ color: c.peach }}>
         A LITTLE STRUCTURE. A SOFTER START.
       </T>
@@ -227,7 +232,7 @@ export function Alarms() {
         }
       />
       {data.alarms.length ? (
-        data.alarms.map((alarm) => <AlarmCard key={alarm.id} alarm={alarm} />)
+        data.alarms.map((alarm, i) => <Enter key={alarm.id} delay={Math.min(i * 45, 180)}><AlarmCard alarm={alarm} /></Enter>)
       ) : (
         <>
           <Image

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { withHapticFeedback } from "@/services/haptics";
 import { View, TextInput, Linking, Platform, AppState } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useReducedMotion } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
+import { useSceneMotion } from "@/components/motion";
+import { ClayMotion } from "@/components/clay-motion";
 import {
   Screen,
   T,
@@ -26,7 +29,7 @@ import {
 
 export function Sleep() {
   const inset = useSafeAreaInsets(),
-    reduced = useReducedMotion();
+    { reduced, running } = useSceneMotion();
   const [minutes, setMinutes] = useState(5),
     [until, setUntil] = useState<number | null>(null),
     [seconds, setSeconds] = useState(0),
@@ -75,6 +78,7 @@ export function Sleep() {
             animationDuration: "10000ms",
             animationTimingFunction: "ease-in-out",
             animationIterationCount: "infinite",
+            animationPlayState: running ? "running" : "paused",
           }}
         >
           <Image
@@ -83,6 +87,7 @@ export function Sleep() {
             style={{ width: "100%", height: "100%" }}
           />
         </Animated.View>
+        <ClayMotion name="stars" size={300} style={{ position: "absolute" }} />
       </View>
       {until ? (
         <View style={{ gap: 20, alignItems: "center" }}>
@@ -120,6 +125,7 @@ export function Sleep() {
       )}
       <Button
         secondary
+        haptic={until ? "success" : "light"}
         title={
           until
             ? "Finish for tonight"
@@ -225,15 +231,16 @@ export function Journal() {
       </Card>
       <Button
         title={saved ? "Your moment is saved" : "Save this little moment"}
+        haptic={false}
         loading={busy}
         icon={saved ? "checkmark" : "add"}
         onPress={() =>
-          void update({
+          void withHapticFeedback(() => update({
             journal: [
               { date: today, mood, note: note.trim() },
               ...data.journal.filter((j) => j.date !== today),
             ],
-          })
+          }))
             .then(() => setSaved(true))
             .catch(() => {})
         }
@@ -253,7 +260,7 @@ export function Journal() {
         <View style={{ flex: 1 }}>
           <T variant="heading">{data.completions.length} little beginnings</T>
           <T variant="small" style={{ color: c.muted }}>
-            Mornings you’ve greeted with Daybreak.
+            Mornings you’ve greeted with Refresh.
           </T>
         </View>
       </Card>
@@ -294,14 +301,14 @@ export function Settings() {
     setTesting(true);
     try {
       const when = new Date(Date.now() + 120000);
-      await saveAlarm({
+      await withHapticFeedback(() => saveAlarm({
         ...newAlarm(),
         hour: when.getHours(),
         minute: when.getMinutes(),
         days: [],
         label: "Your test wake-up",
         challenge: "none",
-      });
+      }));
       setMessage(
         "Test alarm saved for about two minutes from now. You can delete it from Alarms.",
       );
@@ -313,7 +320,7 @@ export function Settings() {
     <Screen>
       <View style={{ alignItems: "center", gap: 10, paddingVertical: 12 }}>
         <Icon name="sunny-outline" size={38} color={c.peach} />
-        <T variant="heading">Daybreak</T>
+        <T variant="heading">Refresh</T>
         <T style={{ color: c.muted }}>A kinder way to wake up.</T>
       </View>
       <Card>
@@ -366,24 +373,17 @@ export function Settings() {
             ? "System alarms are powered by Apple AlarmKit. They can sound through Silent mode and Focus."
             : Platform.OS === "web"
               ? "This browser is a visual preview. Demo alarms only run while the page stays open. Install a mobile build for scheduled device alerts."
-              : "This build uses local notifications. Notification settings, Focus, and battery restrictions may silence or delay them. On iOS 26+, install a Daybreak native build to use AlarmKit."}
+              : "This build uses local notifications. Notification settings, Focus, and battery restrictions may silence or delay them. On iOS 26+, install a Refresh native build to use AlarmKit."}
         </T>
         <T variant="small" style={{ color: c.muted }}>
           Wake-up challenges run inside the app. The operating system’s Stop
-          button remains available. Snoozing in Daybreak schedules a new alarm
+          button remains available. Snoozing in Refresh schedules a new alarm
           for your selected interval.
-        </T>
-      </Card>
-      <Card style={{ padding: 20, gap: 10 }}>
-        <T variant="label">More sounds, in their own time.</T>
-        <T variant="small" style={{ color: c.muted }}>
-          No audio assets are included yet. Your sound selections are saved, and
-          alarms use the device default sound. The collection is ready to grow
-          with custom sounds and adhan later.
         </T>
       </Card>
       <Button
         title="Schedule a test alarm"
+        haptic={false}
         secondary
         loading={testing || busy}
         onPress={() => void testAlarm().catch(() => {})}
@@ -395,7 +395,7 @@ export function Settings() {
         </T>
       </Tap>
       <T variant="small" style={{ textAlign: "center", color: c.faint }}>
-        DAYBREAK 1.0 · A LITTLE MORE LIGHT
+        REFRESH 1.0 · A LITTLE MORE LIGHT
       </T>
     </Screen>
   );

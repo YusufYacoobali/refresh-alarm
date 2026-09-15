@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name           = 'DaybreakAlarmKit'
   s.version        = '1.0.0'
-  s.summary        = 'Daybreak system alarms for iOS 26+'
+  s.summary        = 'Refresh system alarms for iOS 26+'
   s.description    = 'Expo bridge for AlarmKit authorization, schedules, and wake-up intents.'
   s.author         = ''
   s.homepage       = 'https://docs.expo.dev/modules/'

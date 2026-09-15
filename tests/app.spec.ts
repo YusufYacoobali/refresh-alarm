@@ -93,14 +93,11 @@ test("failed storage preserves the alarm draft and allows retry", async ({
   });
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(
-    page.getByText("Test storage failure", { exact: true }),
+    page.getByTestId("save-error"),
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Alarm label", exact: true }),
   ).toHaveValue("Keep my draft");
-  await page
-    .getByRole("button", { name: "Dismiss message", exact: true })
-    .click();
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Keep my draft", { exact: true })).toBeVisible();
 });
@@ -120,31 +117,28 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page
     .getByRole("button", { name: "Set your first alarm", exact: true })
     .click();
-  await page
-    .getByRole("textbox", { name: "Alarm hour", exact: true })
-    .fill("8");
-  await page
-    .getByRole("textbox", { name: "Alarm minute", exact: true })
-    .fill("35");
+  await page.getByLabel("Alarm hour", { exact: true }).press("ArrowDown");
+  for (let i = 0; i < 35; i++) await page.getByLabel("Alarm minute", { exact: true }).press("ArrowDown");
+  await expect(page.getByLabel("Alarm minute", { exact: true })).toHaveAttribute("aria-valuenow", "35");
   await page
     .getByRole("textbox", { name: "Alarm label", exact: true })
     .fill("A lovely morning");
-  await page.getByRole("button", { name: /Sound Morning Light/ }).click();
+  await page.getByRole("button", { name: /Sound Lo-fi/ }).click();
   await expect(
-    page.getByText("Find your morning.", { exact: true }),
+    page.getByText("Alarm sounds", { exact: true }).last(),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Select Forest", exact: true })
+    .getByRole("button", { name: "Select Rooster", exact: true })
     .click();
   await page.screenshot({ path: "artifacts/screenshots/04-sounds.png" });
   await page
     .getByRole("button", { name: "Use this sound", exact: true })
     .click();
-  await page.getByRole("button", { name: /Wake-up challenge/ }).click();
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: "Memory match", exact: true }).click();
   await page.screenshot({ path: "artifacts/screenshots/05-challenges.png" });
   await page
-    .getByRole("button", { name: "That’s my kind of morning", exact: true })
+    .getByRole("button", { name: "Use 1 mission", exact: true })
     .click();
   await page.screenshot({ path: "artifacts/screenshots/03-editor.png" });
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
@@ -182,19 +176,10 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
     page.getByText("Your moment is saved", { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "artifacts/screenshots/08-journal.png" });
-  await page.getByRole("tab", { name: "Unwind" }).click();
-  await page
-    .getByRole("button", { name: "Begin a quiet moment", exact: true })
-    .click();
-  await expect(
-    page.getByText("Nothing to do. Just be.", { exact: true }),
-  ).toBeVisible();
-  await page.screenshot({ path: "artifacts/screenshots/07-unwind.png" });
-  await page
-    .getByRole("button", { name: "Finish for tonight", exact: true })
-    .click();
+  await expect(page.getByRole("tab", { name: "Unwind" })).toHaveCount(0);
   await page.goto("/challenge?id=demo&preview=1&kind=math");
   for (let i = 0; i < 3; i++) {
+    await expect(page.getByTestId("math-question")).toHaveText(/^\d+ \+ \d+$/, { useInnerText: true });
     const q = await page.getByTestId("math-question").innerText();
     const [a, b] = q.split("+").map(Number);
     await page

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Daybreak",
+    "name": "Refresh",
     "slug": "daybreak-alarm",
     "scheme": "daybreak",
     "version": "1.0.0",
@@ -11,8 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.daybreak.alarm",
       "infoPlist": {
-        "NSAlarmKitUsageDescription": "Daybreak uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
-        "NSMotionUsageDescription": "Daybreak uses motion only during your shake-to-wake challenge.",
+        "NSAlarmKitUsageDescription": "Refresh uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
+        "NSMotionUsageDescription": "Refresh uses motion only during your shake-to-wake challenge.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -31,9 +31,43 @@
     },
     "plugins": [
       "expo-router",
+      "expo-image",
       "expo-font",
-      ["expo-notifications", { "color": "#BDB0F5" }],
-      "expo-sensors"
+      [
+        "expo-notifications",
+        {
+          "color": "#BDB0F5",
+          "sounds": [
+            "./assets/audio/alarms/daybreak_lofi.wav",
+            "./assets/audio/alarms/daybreak_wake_up.wav",
+            "./assets/audio/alarms/daybreak_classic_bell.wav",
+            "./assets/audio/alarms/daybreak_retro_clock.wav",
+            "./assets/audio/alarms/daybreak_short_ring.wav",
+            "./assets/audio/alarms/daybreak_digital_beep.wav",
+            "./assets/audio/alarms/daybreak_pulse.wav",
+            "./assets/audio/alarms/daybreak_bright_alarm.wav",
+            "./assets/audio/alarms/daybreak_electronic.wav",
+            "./assets/audio/alarms/daybreak_steady_alarm.wav",
+            "./assets/audio/alarms/daybreak_rooster.wav",
+            "./assets/audio/alarms/daybreak_funny_alarm.wav",
+            "./assets/audio/alarms/daybreak_arcade.wav",
+            "./assets/audio/alarms/daybreak_biohazard.wav",
+            "./assets/audio/alarms/daybreak_emergency.wav",
+            "./assets/audio/alarms/daybreak_adhan_alafasy_fajr.wav",
+            "./assets/audio/alarms/daybreak_adhan.wav"
+          ]
+        }
+      ],
+      "expo-sensors",
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "microphonePermission": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-asset"
     ]
   }
 }

@@ -1,6 +1,9 @@
+import { sounds, soundName, validSound } from "./sounds";
+import type { SoundId } from "./sounds";
+export { sounds, soundName };
+export type { SoundId };
 export type Challenge = "none" | "math" | "memory" | "shake";
-export type SoundId =
-  "system" | "morning" | "forest" | "ocean" | "rain" | "chimes" | "night";
+export type Mission = { kind: Exclude<Challenge, "none">; difficulty: "gentle" | "bright" };
 export type Registration = {
   kind: "alarmkit" | "notifications" | "preview";
   ids: string[];
@@ -15,6 +18,8 @@ export type Alarm = {
   sound: SoundId;
   challenge: Challenge;
   difficulty: "gentle" | "bright";
+  /** Ordered missions. Undefined reads the legacy single-mission settings. */
+  missions?: Mission[];
   snooze: number;
   registration?: Registration;
   nextAt?: number;
@@ -26,58 +31,18 @@ export const challengeNames: Record<Challenge, string> = {
   memory: "Memory match",
   shake: "Shake to wake",
 };
-export const sounds: {
-  id: SoundId;
-  name: string;
-  category: string;
-  tile: number;
-  description: string;
-}[] = [
-  {
-    id: "morning",
-    name: "Morning Light",
-    category: "Cosmic",
-    tile: 0,
-    description: "A little sunshine for your morning.",
-  },
-  {
-    id: "forest",
-    name: "Forest",
-    category: "Nature",
-    tile: 1,
-    description: "Wake up somewhere a little greener.",
-  },
-  {
-    id: "ocean",
-    name: "Ocean",
-    category: "Nature",
-    tile: 2,
-    description: "Make room for a slower morning.",
-  },
-  {
-    id: "rain",
-    name: "Rain",
-    category: "Focus",
-    tile: 3,
-    description: "A soft start, one drop at a time.",
-  },
-  {
-    id: "chimes",
-    name: "Wind Chimes",
-    category: "Focus",
-    tile: 4,
-    description: "A gentle nudge into a new day.",
-  },
-  {
-    id: "night",
-    name: "Night Sky",
-    category: "Cosmic",
-    tile: 5,
-    description: "A little wonder before the day begins.",
-  },
-];
-export function soundName(id: SoundId) {
-  return sounds.find((s) => s.id === id)?.name ?? "System sound";
+export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">): Mission[] {
+  return alarm.missions ?? (alarm.challenge === "none" ? [] : [{ kind: alarm.challenge, difficulty: alarm.difficulty }]);
+}
+export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">) {
+  const missions = alarmMissions(alarm);
+  return missions.length ? missions.map(m => challengeNames[m.kind]).join(" → ") : "No missions";
+}
+export function missionDescription(kind: Mission["kind"], difficulty: Mission["difficulty"]) {
+  const hard = difficulty === "bright";
+  if (kind === "math") return hard ? "3 multiplication questions" : "3 addition questions";
+  if (kind === "memory") return hard ? "4 pairs · 0.8-second preview" : "4 pairs · 2-second preview";
+  return hard ? "20 separate shakes" : "12 separate shakes";
 }
 export function displayTime(a: Pick<Alarm, "hour" | "minute">) {
   return `${a.hour % 12 || 12}:${String(a.minute).padStart(2, "0")}`;
@@ -135,20 +100,14 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose a wake-up challenge.");
   if (
     !["gentle", "bright"].includes(a.difficulty) ||
-    ![5, 10, 15].includes(a.snooze)
+    ![0, 5, 10, 15].includes(a.snooze)
   )
     throw new Error("Choose valid challenge and snooze settings.");
-  if (
-    ![
-      "system",
-      "morning",
-      "forest",
-      "ocean",
-      "rain",
-      "chimes",
-      "night",
-    ].includes(a.sound)
-  )
+  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 3 ||
+    a.missions.some(m => !m || !["math", "memory", "shake"].includes(m.kind) || !["gentle", "bright"].includes(m.difficulty)) ||
+    new Set(a.missions.map(m => m.kind)).size !== a.missions.length))
+    throw new Error("Choose each mission once and set its difficulty.");
+  if (!validSound(a.sound))
     throw new Error("Choose a valid sound preference.");
 }
 export function mathQuestion(level: Alarm["difficulty"], random = Math.random) {
@@ -168,3 +127,4 @@ export function memoryDeck(random = Math.random) {
   }
   return cards;
 }
+

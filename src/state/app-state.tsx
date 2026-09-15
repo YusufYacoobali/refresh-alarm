@@ -48,8 +48,9 @@ export function newAlarm(): Alarm {
     days: [1, 2, 3, 4, 5],
     label: "Rise & shine",
     enabled: true,
-    sound: "morning",
+    sound: "lofi",
     challenge: "none",
+    missions: [],
     difficulty: "gentle",
     snooze: 5,
   };
@@ -168,6 +169,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       );
     locked.current = true;
     setBusy(true);
+    setError(null);
     try {
       await fn();
     } catch (e) {
@@ -266,6 +268,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   const snooze = (alarm: Alarm) =>
     transaction(async () => {
+      if (alarm.snooze === 0) throw new Error("Snooze is off for this alarm.");
       const at = Date.now() + alarm.snooze * 60000;
       const registration = await scheduleAlarm(alarm, new Date(at));
       try {

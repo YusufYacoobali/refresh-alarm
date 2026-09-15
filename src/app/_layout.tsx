@@ -12,8 +12,14 @@ import { Nunito_800ExtraBold } from "@expo-google-fonts/nunito/800ExtraBold";
 import * as Notifications from "expo-notifications";
 import { AppProvider, useApp } from "@/state/app-state";
 import { colors as c, fonts } from "@/theme";
-import { T, Button, Card, Tap, Icon } from "@/components/ui";
+import { T, Button } from "@/components/ui";
 import AlarmKit from "@/services/alarm-kit";
+import { MotionProvider, useMotion } from "@/components/motion";
+import { ScreenErrorLayer } from "@/components/screen-error-layer";
+
+const screenLayout = ({ children }: { children: React.ReactNode }) => (
+  <ScreenErrorLayer>{children}</ScreenErrorLayer>
+);
 
 if (Platform.OS !== "web")
   Notifications.setNotificationHandler({
@@ -26,7 +32,8 @@ if (Platform.OS !== "web")
   });
 
 function AppContent() {
-  const { data, ready, error, clearError, retry } = useApp();
+  const { reduced } = useMotion();
+  const { data, ready, error, retry } = useApp();
   const snapshot = useRef(data),
     seen = useRef(new Set<string>()),
     displayed = useRef<string | null>(null);
@@ -130,7 +137,7 @@ function AppContent() {
   if (!ready)
     return (
       <View style={styles.loading}>
-        <T variant="heading">Daybreak</T>
+        <T variant="heading">Refresh</T>
         {error && (
           <>
             <T>{error}</T>
@@ -142,6 +149,7 @@ function AppContent() {
   return (
     <>
       <Stack
+        screenLayout={screenLayout}
         screenOptions={{
           headerStyle: { backgroundColor: c.bg },
           headerTintColor: c.text,
@@ -149,6 +157,7 @@ function AppContent() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
           contentStyle: { backgroundColor: c.bg },
+          animation: reduced ? "fade" : "default",
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -192,24 +201,6 @@ function AppContent() {
           options={{ headerShown: false, gestureEnabled: false }}
         />
       </Stack>
-      {error && (
-        <View style={styles.toast}>
-          <Card
-            style={{
-              padding: 16,
-              borderColor: c.danger,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <T style={{ flex: 1 }}>{error}</T>
-            <Tap onPress={clearError} label="Dismiss message">
-              <Icon name="close" color={c.text} />
-            </Tap>
-          </Card>
-        </View>
-      )}
     </>
   );
 }
@@ -226,9 +217,9 @@ export default function Layout() {
       <SafeAreaProvider>
         <View style={styles.frame}>
           <StatusBar style="light" />
-          <AppProvider>
+          <MotionProvider><AppProvider>
             <AppContent />
-          </AppProvider>
+          </AppProvider></MotionProvider>
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -251,5 +242,4 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 20,
   },
-  toast: { position: "absolute", bottom: 100, left: 16, right: 16 },
 });

@@ -3,6 +3,7 @@ import Foundation
 import AlarmKit
 import SwiftUI
 import AppIntents
+import ActivityKit
 
 struct DaybreakAlarmInput: Record {
   @Field var id: String = ""
@@ -12,6 +13,7 @@ struct DaybreakAlarmInput: Record {
   @Field var days: [Int] = []
   @Field var label: String = "Rise & shine"
   @Field var timestamp: Double? = nil
+  @Field var soundName: String? = nil
 }
 
 @available(iOS 26.0, *)
@@ -20,7 +22,7 @@ struct DaybreakMetadata: AlarmMetadata { var alarmId: String }
 /// The system action opens the app. Native storage survives a cold launch.
 @available(iOS 26.0, *)
 public struct OpenDaybreakIntent: LiveActivityIntent {
-  public static var title: LocalizedStringResource = "Wake up with Daybreak"
+  public static var title: LocalizedStringResource = "Wake up with Refresh"
   public static var openAppWhenRun = true
   @Parameter(title: "Alarm") public var alarmId: String
   public init() { alarmId = "" }
@@ -49,7 +51,7 @@ public class DaybreakAlarmKitModule: Module {
     AsyncFunction("schedule") { (input: DaybreakAlarmInput) async throws in
       guard #available(iOS 26.0, *) else { throw Self.error("AlarmKit requires iOS 26 or later.") }
       guard let id = UUID(uuidString: input.id), (0...23).contains(input.hour), (0...59).contains(input.minute), input.days.allSatisfy({ (0...6).contains($0) }) else { throw Self.error("Invalid alarm schedule.") }
-      guard AlarmManager.shared.authorizationState == .authorized else { throw Self.error("Allow Daybreak alarms in Settings before scheduling.") }
+      guard AlarmManager.shared.authorizationState == .authorized else { throw Self.error("Allow Refresh alarms in Settings before scheduling.") }
       let schedule: Alarm.Schedule
       if let timestamp = input.timestamp {
         guard timestamp > Date().timeIntervalSince1970 else { throw Self.error("The alarm time has already passed.") }
@@ -71,10 +73,16 @@ public class DaybreakAlarmKitModule: Module {
         tintColor: Color(red: 0.74, green: 0.69, blue: 0.96)
       )
       // Snooze is a new fixed alarm. No countdown / Live Activity extension is needed.
-      // Audio assets are intentionally absent; use the system alarm tone.
+      let sound: AlertConfiguration.AlertSound
+      if let name = input.soundName {
+        guard name.hasPrefix("daybreak_"), name.hasSuffix(".wav"),
+              !name.contains("/"), Bundle.main.url(forResource: name, withExtension: nil) != nil
+        else { throw Self.error("This alarm sound is missing. Rebuild Refresh with its audio assets.") }
+        sound = .named(name)
+      } else { sound = .default }
       let configuration = AlarmManager.AlarmConfiguration<DaybreakMetadata>.alarm(
         schedule: schedule, attributes: attributes,
-        secondaryIntent: OpenDaybreakIntent(alarmId: input.alarmId), sound: .default
+        secondaryIntent: OpenDaybreakIntent(alarmId: input.alarmId), sound: sound
       )
       _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
     }

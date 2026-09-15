@@ -15,11 +15,14 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon, IconName } from "./icon";
 export { Icon, IconName } from "./icon";
-import * as Haptics from "expo-haptics";
+import { haptic as playHaptic, HapticKind } from "@/services/haptics";
 import Animated, {
   FadeInDown,
-  useReducedMotion,
+  FadeIn,
+  FadeInUp,
+  LinearTransition,
 } from "react-native-reanimated";
+import { easeOut, useMotion } from "./motion";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors as c, fonts, type, art } from "@/theme";
@@ -38,6 +41,7 @@ export function Tap({
   label,
   disabled,
   selected,
+  haptic = true,
 }: {
   children: React.ReactNode;
   onPress: () => void;
@@ -45,19 +49,24 @@ export function Tap({
   label?: string;
   disabled?: boolean;
   selected?: boolean;
+  haptic?: boolean | HapticKind;
 }) {
   const [pressed, setPressed] = useState(false);
-  const reduced = useReducedMotion();
+  const { reduced } = useMotion();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled, selected }}
+      aria-disabled={!!disabled}
+      aria-pressed={selected}
       disabled={disabled}
+      hitSlop={4}
+      pressRetentionOffset={16}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPress={() => {
-        void Haptics.selectionAsync().catch(() => {});
+        if (haptic) playHaptic(haptic === true ? "selection" : haptic);
         onPress();
       }}
       style={style}
@@ -65,9 +74,10 @@ export function Tap({
       <Animated.View
         style={{
           opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
-          transform: [{ scale: pressed && !reduced ? 0.975 : 1 }],
+          transform: [{ translateY: pressed && !reduced ? 1 : 0 }, { scale: reduced ? 1 : pressed ? 0.96 : selected ? 1.015 : 1 }],
           transitionProperty: ["transform", "opacity"],
           transitionDuration: reduced ? 0 : 120,
+          transitionTimingFunction: easeOut,
         }}
       >
         {children}
@@ -80,6 +90,7 @@ export function Button({
   onPress,
   secondary = false,
   loading = false,
+  haptic = "light",
   icon,
   style,
 }: {
@@ -87,11 +98,12 @@ export function Button({
   onPress: () => void;
   secondary?: boolean;
   loading?: boolean;
+  haptic?: false | HapticKind;
   icon?: IconName;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Tap onPress={onPress} label={title} disabled={loading} style={style}>
+    <Tap onPress={onPress} label={title} disabled={loading} style={style} haptic={haptic}>
       <LinearGradient
         colors={secondary ? ["#CEC2FF", "#A997EB"] : ["#FFE4CC", "#F4C8A9"]}
         start={{ x: 0, y: 0 }}
@@ -136,7 +148,8 @@ export function Card({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[s.card, style]}>{children}</View>;
+  const { reduced } = useMotion();
+  return <Animated.View entering={reduced ? undefined : FadeIn.duration(220)} layout={reduced ? undefined : LinearTransition.duration(220)} style={[s.card, style, { transitionProperty: ["backgroundColor", "borderColor", "opacity"], transitionDuration: reduced ? 0 : 180 }]}>{children}</Animated.View>;
 }
 export function Row({
   icon,
@@ -153,6 +166,7 @@ export function Row({
   last?: boolean;
   children?: React.ReactNode;
 }) {
+  const { reduced } = useMotion();
   const content = (
     <View
       style={[
@@ -166,12 +180,12 @@ export function Row({
       </T>
       {children ?? (
         <>
-          <T
+          <Animated.View key={value} entering={reduced ? undefined : FadeInUp.duration(180)} style={{ maxWidth: "43%" }}><T
             variant="small"
-            style={{ color: c.muted, maxWidth: "43%", textAlign: "right" }}
+            style={{ color: c.muted, textAlign: "right" }}
           >
             {value}
-          </T>
+          </T></Animated.View>
           {onPress && <Icon name="chevron-forward" size={15} color={c.faint} />}
         </>
       )}
@@ -189,8 +203,10 @@ export function Screen({
   scroll?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { reduced } = useMotion();
   return scroll ? (
-    <ScrollView
+    <Animated.ScrollView
+      entering={reduced ? undefined : FadeIn.duration(220)}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentInsetAdjustmentBehavior="automatic"
       automaticallyAdjustKeyboardInsets
@@ -203,7 +219,7 @@ export function Screen({
       showsVerticalScrollIndicator={false}
     >
       {children}
-    </ScrollView>
+    </Animated.ScrollView>
   ) : (
     <View
       style={[
@@ -246,11 +262,11 @@ export function Chip({
 }) {
   return (
     <Tap onPress={onPress} selected={active} style={{ flex: 1 }}>
-      <View style={[s.chip, active && { backgroundColor: c.peach }]}>
+      <Animated.View style={[s.chip, active && { backgroundColor: c.peach }, { transitionProperty: "backgroundColor", transitionDuration: 180 }]}>
         <T variant="small" style={{ color: active ? c.ink : c.muted }}>
           {title}
         </T>
-      </View>
+      </Animated.View>
     </Tap>
   );
 }
@@ -263,10 +279,11 @@ export function Enter({
   delay?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const reduced = useReducedMotion();
+  const { reduced } = useMotion();
   return (
     <Animated.View
       entering={reduced ? undefined : FadeInDown.duration(280).delay(delay)}
+      layout={reduced ? undefined : LinearTransition.duration(240)}
       style={style}
     >
       {children}

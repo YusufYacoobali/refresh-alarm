@@ -1,4 +1,5 @@
 import { View } from "react-native";
+import { haptic } from "@/services/haptics";
 import { AlarmSwitch } from "./alarm-switch";
 import { router } from "expo-router";
 import { Card, T, Tap, Icon } from "./ui";
@@ -8,6 +9,7 @@ import {
   displayTime,
   repeatLabel,
   challengeNames,
+  alarmMissions,
 } from "@/utils/alarms";
 import { useApp } from "@/state/app-state";
 export function AlarmCard({
@@ -70,7 +72,7 @@ export function AlarmCard({
         <AlarmSwitch
           value={alarm.enabled}
           onValueChange={(value) =>
-            void saveAlarm({ ...alarm, enabled: value }).catch(() => {})
+            void saveAlarm({ ...alarm, enabled: value }).catch(() => haptic("error"))
           }
           disabled={busy}
           label={`Enable ${alarm.label}`}
@@ -91,7 +93,7 @@ export function AlarmCard({
         <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
           <Icon
             name={
-              alarm.challenge === "none"
+              alarmMissions(alarm).length === 0
                 ? "sunny-outline"
                 : "extension-puzzle-outline"
             }
@@ -99,9 +101,7 @@ export function AlarmCard({
             color={c.lavender}
           />
           <T variant="small" style={{ color: c.lavender, fontSize: 10 }}>
-            {alarm.challenge === "none"
-              ? "Easy morning"
-              : challengeNames[alarm.challenge]}
+            {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? challengeNames[alarmMissions(alarm)[0].kind] : "No missions"}
           </T>
         </View>
       </View>

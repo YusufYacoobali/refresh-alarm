@@ -1,0 +1,19 @@
+[
+  {"id":"lofi","name":"Lo-fi","category":"Soft","file":"lesiakower-lo-fi-alarm-clock-243766.mp3"},
+  {"id":"wake_up","name":"Wake Up","category":"Soft","file":"freesound_community-wake-up-33353.mp3"},
+  {"id":"classic_bell","name":"Classic Bell","category":"Classic","file":"78562__joedeshon__alarm_clock_ringing_01.wav"},
+  {"id":"retro_clock","name":"Retro Clock","category":"Classic","file":"freesound_community-alarm-clock-90867.mp3"},
+  {"id":"short_ring","name":"Short Ring","category":"Classic","file":"freesound_community-alarm-clock-short-6402.mp3"},
+  {"id":"digital_beep","name":"Digital Beep","category":"Digital","file":"371292__iamgiorgio__b1_alarm.mp3"},
+  {"id":"pulse","name":"Pulse","category":"Digital","file":"211132__martinbeltov__alarm-type-sound.wav"},
+  {"id":"bright_alarm","name":"Bright Alarm","category":"Digital","file":"freesound_community-wake-up-alarm-68067.mp3"},
+  {"id":"electronic","name":"Electronic","category":"Digital","file":"u_inx5oo5fv3-alarm-327234.mp3"},
+  {"id":"steady_alarm","name":"Steady Alarm","category":"Digital","file":"soundreality-alarm-471496.mp3"},
+  {"id":"rooster","name":"Rooster","category":"Playful","file":"freesound_community-brahma-rooster-89888.mp3"},
+  {"id":"funny_alarm","name":"Funny Alarm","category":"Playful","file":"3dabrar-funny-alarm-317531.mp3"},
+  {"id":"arcade","name":"Arcade Alarm","category":"Playful","file":"8footdino_on_scratch-alarm-301729.mp3"},
+  {"id":"biohazard","name":"Biohazard","category":"Intense","file":"dennish18-biohazard-alarm-143105.mp3"},
+  {"id":"emergency","name":"Emergency Alert","category":"Intense","file":"jeremayjimenez-greece-eas-alarm-451404.mp3"},
+  {"id":"adhan_alafasy_fajr","name":"Mishary Alafasy · Fajr","category":"Islamic","file":"Y2Mate.is - Adhan Call to prayer _ Mishary Rashid Alafasy _ Fajr _ Maqam Hijaz .mp3","fullPlayback":true},
+  {"id":"adhan","name":"Adhan","category":"Islamic","file":"Y2Mate.is - Best Adhan in the world - Muslim Call to Prayer.mp3","fullPlayback":true}
+]

@@ -8,6 +8,8 @@ import {
   mathQuestion,
   memoryDeck,
   Alarm,
+  alarmMissions,
+  missionDescription,
 } from "./alarms";
 const alarm: Alarm = {
   id: "test",
@@ -73,4 +75,22 @@ test("gentle and bright questions return correct arithmetic", () => {
   assert.equal(gentle.answer, 12);
   assert.equal(bright.text, "9 × 6");
   assert.equal(bright.answer, 54);
+});
+test("legacy alarms retain their mission and new empty sequences mean no missions", () => {
+  assert.deepEqual(alarmMissions(alarm), [{ kind: "math", difficulty: "gentle" }]);
+  assert.deepEqual(alarmMissions({ ...alarm, missions: [] }), []);
+  const missions = [{ kind: "shake" as const, difficulty: "bright" as const }, { kind: "math" as const, difficulty: "gentle" as const }];
+  assert.deepEqual(alarmMissions({ ...alarm, missions }), missions);
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, missions, snooze: 0 }));
+});
+test("mission validation rejects duplicates, invalid difficulty, and unknown kinds", () => {
+  for (const missions of [
+    [{ kind: "math", difficulty: "gentle" }, { kind: "math", difficulty: "bright" }],
+    [{ kind: "memory", difficulty: "unknown" }],
+    [{ kind: "none", difficulty: "gentle" }],
+    [null],
+  ]) assert.throws(() => validateAlarm({ ...alarm, missions } as Alarm));
+  assert.throws(() => validateAlarm({ ...alarm, snooze: -1 }));
+  assert.equal(missionDescription("shake", "bright"), "20 separate shakes");
+  assert.equal(missionDescription("memory", "gentle"), "4 pairs · 2-second preview");
 });

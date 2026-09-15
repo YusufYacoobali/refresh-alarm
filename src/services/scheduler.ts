@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import * as Crypto from "expo-crypto";
 import AlarmKit from "./alarm-kit";
 import { Alarm, Registration, nextOccurrence } from "@/utils/alarms";
+import { soundFile, soundName, resolveSoundId } from "@/utils/sounds";
 
 export const alarmKitAvailable = () =>
   Platform.OS === "ios" && !!AlarmKit?.isSupported();
@@ -36,7 +37,7 @@ export async function cancelRegistration(r?: Registration) {
     if (r.kind === "alarmkit") {
       if (!AlarmKit)
         throw new Error(
-          "Open your Daybreak development build to manage this system alarm.",
+          "Open your Refresh development build to manage this system alarm.",
         );
       await AlarmKit.cancel(id);
     }
@@ -69,15 +70,26 @@ export async function scheduleAlarm(
       minute: alarm.minute,
       days: alarm.days,
       label: alarm.label,
+      soundName: soundFile(alarm.sound),
       ...(at ? { timestamp: at.getTime() / 1000 } : {}),
     });
     return { kind: "alarmkit", ids: [id] };
   }
   const ids: string[] = [];
+  const audioFile = soundFile(alarm.sound);
+  const channelId = audioFile ? `alarm-${resolveSoundId(alarm.sound)}-v1` : "alarms";
+  if (Platform.OS === "android" && audioFile) await Notifications.setNotificationChannelAsync(channelId, {
+    name: `Alarms · ${soundName(alarm.sound)}`,
+    importance: Notifications.AndroidImportance.MAX,
+    sound: audioFile,
+    audioAttributes: { usage: Notifications.AndroidAudioUsage.ALARM },
+    vibrationPattern: [0, 500, 250, 500],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
   const content: Notifications.NotificationContentInput = {
     title: alarm.label,
-    body: "Your day is waiting. Open Daybreak to wake up your way.",
-    sound: "default",
+    body: "Time to wake up.",
+    sound: audioFile ?? "default",
     data: { alarmId: alarm.id },
     categoryIdentifier: "wake-up",
   };
@@ -91,7 +103,7 @@ export async function scheduleAlarm(
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: at ?? nextOccurrence(alarm),
-            channelId: "alarms",
+            channelId,
           },
         }),
       );
@@ -109,7 +121,7 @@ export async function scheduleAlarm(
               weekday: day + 1,
               hour: alarm.hour,
               minute: alarm.minute,
-              channelId: "alarms",
+              channelId,
             },
           }),
         );

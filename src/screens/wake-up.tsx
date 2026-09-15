@@ -1,13 +1,16 @@
 import { goHome } from "@/utils/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Platform, BackHandler, AppState } from "react-native";
+import { View, Platform, BackHandler, AppState, useWindowDimensions } from "react-native";
+import { AlarmSound } from "@/components/alarm-sound";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
 import { Accelerometer } from "expo-sensors";
-import * as Haptics from "expo-haptics";
+import { haptic, withHapticFeedback } from "@/services/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useReducedMotion } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { ClayMotion } from "@/components/clay-motion";
+import { Float, easeOut, useFeedback, useMotion } from "@/components/motion";
 import {
   T,
   Button,
@@ -26,6 +29,8 @@ import {
   displayTime,
   mathQuestion,
   memoryDeck,
+  alarmMissions,
+  challengeNames,
 } from "@/utils/alarms";
 import { art, colors as c, fonts } from "@/theme";
 
@@ -82,13 +87,13 @@ export function Ringing() {
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
   async function stop() {
-    if (alarm!.challenge !== "none")
+    if (alarmMissions(alarm!).length)
       router.replace({
         pathname: "/challenge",
         params: { id: alarm!.id, preview: isPreview ? "1" : "0" },
       });
     else {
-      if (!isPreview) await finish(alarm!);
+      await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
       router.replace({
         pathname: "/success",
         params: { preview: isPreview ? "1" : "0" },
@@ -97,12 +102,13 @@ export function Ringing() {
   }
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Image
+      <Float style={{ position: "absolute", inset: -10 }} distance={5}><Image
         source={art.valley}
         contentFit="cover"
         contentPosition="bottom"
         style={{ position: "absolute", inset: 0 }}
-      />
+      /></Float>
+      <ClayMotion name="stars" size={360} style={{ position: "absolute", width: "100%", height: "65%", top: "20%" }} />
       <LinearGradient
         colors={["#090C1866", "transparent", "#090C18"]}
         locations={[0, 0.55, 1]}
@@ -155,24 +161,29 @@ export function Ringing() {
           </T>
           <T variant="heading">{alarm.hour < 12 ? "AM" : "PM"}</T>
         </View>
-        <View style={{ flex: 1 }} />
+        <View style={{ flex: 1, minHeight: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          <ClayMotion name="sun" size={145} />
+        </View>
         <View style={{ width: "100%", gap: 16 }}>
+          <AlarmSound alarm={alarm} preview={isPreview} />
           <Button
             title={
-              alarm.challenge === "none" ? "Hello, new day" : "Wake up my mind"
+              alarmMissions(alarm).length === 0 ? "Hello, new day" : "Wake up my mind"
             }
             icon={
-              alarm.challenge === "none" ? "sunny-outline" : "arrow-forward"
+              alarmMissions(alarm).length === 0 ? "sunny-outline" : "arrow-forward"
             }
             loading={busy}
+            haptic={alarmMissions(alarm).length === 0 ? false : "light"}
             onPress={() => void stop().catch(() => {})}
           />
-          <Tap
+          {alarm.snooze > 0 && <Tap
             disabled={busy}
+            haptic={isPreview ? "light" : false}
             onPress={() =>
               isPreview
                 ? goHome()
-                : void snooze(alarm)
+                : void withHapticFeedback(() => snooze(alarm))
                     .then(() => goHome())
                     .catch(() => {})
             }
@@ -193,35 +204,35 @@ export function Ringing() {
                   : `A little longer · ${alarm.snooze} min`}
               </T>
             </View>
-          </Tap>
+          </Tap>}
         </View>
       </View>
     </View>
   );
 }
-function Progress({ value, total }: { value: number; total: number }) {
+function Progress({ value, total, label = true }: { value: number; total: number; label?: boolean }) {
+  const { reduced } = useMotion();
   return (
     <View style={{ gap: 10 }}>
       <View
         style={{
-          height: 5,
+          height: 7,
           backgroundColor: c.raised,
           borderRadius: 5,
           overflow: "hidden",
         }}
       >
-        <View
+        <Animated.View
           style={{
-            height: 5,
+            position: "absolute", left: 0, top: 0, bottom: 0,
             width: `${Math.min(value / total, 1) * 100}%`,
             backgroundColor: c.lavender,
             borderRadius: 5,
+            transitionProperty: "width", transitionDuration: reduced ? 0 : 320, transitionTimingFunction: easeOut,
           }}
         />
       </View>
-      <T variant="small" style={{ textAlign: "center", color: c.muted }}>
-        {value} of {total} · You’ve got this
-      </T>
+      {label && <T accessibilityLiveRegion="polite" variant="small" style={{ textAlign: "center", color: c.muted }}>{value} of {total}</T>}
     </View>
   );
 }
@@ -236,6 +247,9 @@ function MathGame({
     [count, setCount] = useState(0),
     [wrong, setWrong] = useState<number | null>(null),
     [done, setDone] = useState(false);
+  const [feedback, setFeedback] = useState({ revision: 0, kind: "success" as "success" | "error" });
+  const responseStyle = useFeedback(feedback.revision, feedback.kind);
+  const { reduced } = useMotion();
   const choices = useMemo(
     () =>
       [question.answer, question.answer + 3, question.answer - 2].sort(
@@ -246,43 +260,42 @@ function MathGame({
   function answer(n: number) {
     if (done) return;
     if (n !== question.answer) {
+      setFeedback(f => ({ revision: f.revision + 1, kind: "error" }));
       setWrong(n);
-      void Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Error,
-      ).catch(() => {});
+      haptic("error");
       return;
     }
-    void Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success,
-    ).catch(() => {});
     setWrong(null);
+    setFeedback(f => ({ revision: f.revision + 1, kind: "success" }));
     const next = count + 1;
     setCount(next);
     if (next === 3) {
       setDone(true);
       onDone();
-    } else setQuestion(mathQuestion(difficulty));
+    } else {
+      haptic("success");
+      setQuestion(mathQuestion(difficulty));
+    }
   }
   return (
     <View style={{ gap: 26 }}>
       <Progress value={count} total={3} />
-      <Card style={{ alignItems: "center", paddingVertical: 36, gap: 20 }}>
-        <Icon name="sunny-outline" size={32} color={c.peach} />
-        <T variant="small" style={{ color: c.muted }}>
-          A LITTLE MORNING MATH
-        </T>
-        <T
+      <Animated.View style={responseStyle}>
+      <Card style={{ alignItems: "center", paddingVertical: 18, gap: 12, borderColor: wrong !== null ? c.danger : c.line }}>
+        <ClayMotion name="math" size={146} />
+        <Animated.View key={`question-${count}`} entering={reduced ? undefined : FadeInDown.duration(240)}><T
           testID="math-question"
           style={{ fontSize: 48, fontFamily: fonts.bold }}
         >
           {question.text}
-        </T>
-        <T style={{ color: wrong !== null ? c.peach : c.muted }}>
+        </T></Animated.View>
+        <T accessibilityLiveRegion="polite" style={{ color: wrong !== null ? c.peach : count ? c.green : c.muted }}>
           {wrong !== null
-            ? "Not quite. Take another look."
-            : "What’s the answer?"}
+            ? "Try again."
+            : "Choose the answer."}
         </T>
       </Card>
+      </Animated.View>
       <View style={{ flexDirection: "row", gap: 12 }}>
         {choices.map((n) => (
           <Tap
@@ -291,6 +304,7 @@ function MathGame({
             onPress={() => answer(n)}
             style={{ flex: 1 }}
             disabled={done}
+            haptic={false}
           >
             <Card
               style={{
@@ -307,6 +321,24 @@ function MathGame({
       </View>
     </View>
   );
+}
+function MemoryTile({ tile, revealed, matched }: { tile: number; revealed: boolean; matched: boolean }) {
+  const { reduced } = useMotion();
+  const flip = useSharedValue(revealed ? 180 : 0);
+  const matchStyle = useFeedback(matched ? 1 : 0);
+  useEffect(() => { flip.set(withTiming(revealed ? 180 : 0, { duration: reduced ? 0 : 280 })); }, [revealed, reduced]);
+  const frontStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 850 }, { rotateY: `${flip.get() - 180}deg` }] }));
+  const backStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 850 }, { rotateY: `${flip.get()}deg` }] }));
+  const surface = { position: "absolute" as const, inset: 0, backfaceVisibility: "hidden" as const, borderRadius: 20, overflow: "hidden" as const, borderWidth: 2 };
+  return <Animated.View style={[{ height: 108 }, matchStyle]}>
+    <Animated.View style={[surface, { backgroundColor: c.raised, borderColor: c.line, alignItems: "center", justifyContent: "center" }, backStyle]}>
+      <Icon name="sparkles-outline" size={30} color={c.lavender} />
+    </Animated.View>
+    <Animated.View style={[surface, { backgroundColor: c.raised, borderColor: matched ? c.green : c.lavender, transitionProperty: "borderColor", transitionDuration: 180 }, frontStyle]}>
+      <SoundArt tile={tile} style={{ width: "100%", position: "absolute", top: -24 }} />
+      {matched && <Animated.View entering={reduced ? undefined : FadeIn.duration(180)} style={{ position: "absolute", right: 8, top: 8, backgroundColor: c.green, padding: 4, borderRadius: 15 }}><Icon name="checkmark" size={15} color={c.ink} /></Animated.View>}
+    </Animated.View>
+  </Animated.View>;
 }
 function MemoryGame({
   difficulty,
@@ -336,17 +368,20 @@ function MemoryGame({
       return;
     const next = [...open, i];
     setOpen(next);
-    if (next.length !== 2) return;
+    if (next.length !== 2) {
+      haptic("selection");
+      return;
+    }
     locked.current = true;
     const match = deck[next[0]] === deck[next[1]];
+    // The pair outcome replaces the second card's tap pulse.
+    if (!match) haptic("warning");
+    else if (matched.length + 2 < deck.length) haptic("success");
     timeout.current = setTimeout(
       () => {
         if (match) {
           const m = [...matched, ...next];
           setMatched(m);
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          ).catch(() => {});
           if (m.length === deck.length) onDone();
         }
         setOpen([]);
@@ -358,11 +393,14 @@ function MemoryGame({
   return (
     <View style={{ gap: 22 }}>
       <Progress value={matched.length / 2} total={4} />
-      <T style={{ textAlign: "center", color: c.muted }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <ClayMotion name="memory" size={95} />
+      <T accessibilityLiveRegion="polite" style={{ flex: 1, color: c.muted }}>
         {peek
-          ? "A little peek. Remember where they are…"
-          : "Find the friends that belong together."}
+          ? "Remember the pairs."
+          : "Match the pairs."}
       </T>
+      </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {deck.map((tile, i) => {
           const revealed = peek || open.includes(i) || matched.includes(i);
@@ -377,38 +415,9 @@ function MemoryGame({
               onPress={() => flip(i)}
               style={{ width: "47.8%" }}
               disabled={matched.includes(i)}
+              haptic={false}
             >
-              <View
-                style={{
-                  height: 108,
-                  borderRadius: 20,
-                  overflow: "hidden",
-                  borderWidth: 1,
-                  borderColor: matched.includes(i) ? c.green : c.line,
-                  backgroundColor: c.raised,
-                }}
-              >
-                {revealed ? (
-                  <SoundArt
-                    tile={tile}
-                    style={{ width: "100%", position: "absolute", top: -24 }}
-                  />
-                ) : (
-                  <View
-                    style={{
-                      flex: 1,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Icon
-                      name="sparkles-outline"
-                      size={30}
-                      color={c.lavender}
-                    />
-                  </View>
-                )}
-              </View>
+              <MemoryTile tile={tile} revealed={revealed} matched={matched.includes(i)} />
             </Tap>
           );
         })}
@@ -434,15 +443,17 @@ function ShakeGame({
     last = useRef(0),
     armed = useRef(true);
   const target = difficulty === "bright" ? 20 : 12;
-  const reduced = useReducedMotion();
+  const { width, height } = useWindowDimensions();
+  const { reduced } = useMotion();
+  const shakeStyle = useFeedback(count);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   function register() {
     if (counter.current >= target) return;
     counter.current++;
     setCount(counter.current);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (counter.current === target) doneRef.current();
+    else haptic("light");
   }
   useEffect(() => {
     if (!started || Platform.OS === "web") return;
@@ -486,50 +497,23 @@ function ShakeGame({
     };
   }, [started]);
   return (
-    <View style={{ gap: 26 }}>
-      <Progress value={count} total={target} />
-      <View style={{ alignItems: "center", paddingVertical: 32, gap: 24 }}>
-        <Animated.View
-          style={{
-            width: 144,
-            height: 180,
-            borderRadius: 44,
-            backgroundColor: c.raised,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 2,
-            borderColor: c.lilac,
-            animationName: reduced
-              ? undefined
-              : {
-                  "0%,100%": { transform: [{ rotate: "-7deg" }] },
-                  "50%": { transform: [{ rotate: "7deg" }] },
-                },
-            animationDuration: "1600ms",
-            animationTimingFunction: "ease-in-out",
-            animationIterationCount: "infinite",
-          }}
-        >
-          <Icon name="phone-portrait-outline" size={85} color={c.lavender} />
+    <View style={{ gap: 18 }}>
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Animated.View style={shakeStyle}>
+          <T testID="shake-count" accessibilityLabel={`${count} of ${target} shakes`} accessibilityLiveRegion="polite" style={{ fontFamily: fonts.bold, fontSize: Math.min(144, width * .38), lineHeight: Math.min(155, width * .42), fontVariant: ["tabular-nums"], color: c.peach }}>{count}</T>
         </Animated.View>
-        <T variant="heading">
-          {count === target
-            ? "Hello, energy!"
-            : "A little shake. A fresh start."}
-        </T>
-        <T style={{ textAlign: "center", color: c.muted }}>
-          {
-            "Hold your phone securely and shake gently.\nEach separate shake counts once."
-          }
-        </T>
+        <T style={{ color: c.muted, fontSize: 20 }}>of {target} shakes</T>
+        <ClayMotion name="shake" size={height < 700 ? 100 : 140} />
+        <T style={{ textAlign: "center", color: c.muted }}>Hold firmly. Shake gently.</T>
       </View>
+      <Progress value={count} total={target} label={false} />
       {Platform.OS === "web" ? (
         <>
           <T variant="small" style={{ textAlign: "center", color: c.peach }}>
-            Motion sensing is available in the mobile app.
+            Shake detection needs the mobile app.
           </T>
           {isPreview && (
-            <Button title="Preview a shake" secondary onPress={register} />
+            <Button title="Preview a shake" secondary haptic={false} onPress={register} />
           )}
         </>
       ) : !started ? (
@@ -537,15 +521,15 @@ function ShakeGame({
       ) : (
         <T style={{ textAlign: "center", color: c.muted }}>
           {status === "listening"
-            ? "Ready when you are…"
+            ? "Listening for shakes"
             : status === "ready"
-              ? "Connecting to motion sensors…"
-              : "Motion is unavailable. Try a math puzzle instead."}
+              ? "Connecting…"
+              : "Motion unavailable. Use math instead."}
         </T>
       )}
-      <Tap onPress={onFallback}>
+      <Tap label="Prefer not to shake? Try math instead" onPress={onFallback}>
         <T variant="small" style={{ textAlign: "center", color: c.lavender }}>
-          Prefer not to shake? Try math instead →
+          Use math instead
         </T>
       </Tap>
     </View>
@@ -557,20 +541,35 @@ export function ChallengeScreen() {
   const inset = useSafeAreaInsets();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
+  const [missionIndex, setMissionIndex] = useState(0);
+  const advancing = useRef(false);
+  useEffect(() => { advancing.current = false; }, [missionIndex]);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
-  const challenge = fallback ? "math" : (kind ?? alarm.challenge);
-  const level = difficulty ?? alarm.difficulty;
+  const missions = isPreview && kind && kind !== "none" ? [{ kind, difficulty: difficulty ?? alarm.difficulty }] : alarmMissions(alarm);
+  const mission = missions[missionIndex];
+  const challenge = fallback ? "math" : mission?.kind ?? "none";
+  const level = mission?.difficulty ?? "gentle";
   async function complete() {
     setCompleted(true);
-    if (!isPreview) await finish(alarm!);
+    await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
     router.replace({
       pathname: "/success",
       params: { preview: isPreview ? "1" : "0" },
     });
   }
+  function nextMission() {
+    if (advancing.current) return;
+    advancing.current = true;
+    if (missionIndex + 1 < missions.length) {
+      haptic("success");
+      setMissionIndex(i => i + 1);
+      setFallback(false);
+    } else void complete().catch(() => {});
+  }
   return (
     <Screen style={{ paddingTop: inset.top + 26 }}>
+      <AlarmSound alarm={alarm} preview={isPreview} />
       <View
         style={{
           flexDirection: "row",
@@ -579,53 +578,60 @@ export function ChallengeScreen() {
         }}
       >
         <T variant="eyebrow" style={{ color: c.peach }}>
-          {isPreview ? "A LITTLE PRACTICE" : "LET’S GREET THE DAY"}
+          {isPreview ? "PREVIEW" : "WAKE-UP MISSION"}
         </T>
         {isPreview && (
-          <Tap label="Close challenge preview" onPress={() => goHome()}>
+          <Tap label="Close challenge preview" onPress={() => router.canGoBack() ? router.back() : goHome()}>
             <Icon name="close" />
           </Tap>
         )}
       </View>
       <View style={{ gap: 8 }}>
+        {missions.length > 0 && <View style={{ gap: 10 }}>
+          <T variant="small" accessibilityLiveRegion="polite" style={{ color: c.lavender }}>Mission {missionIndex + 1} of {missions.length} · {challengeNames[challenge]}</T>
+          <View style={{ flexDirection: "row", gap: 6 }}>{missions.map((m, i) => <View key={m.kind} style={{ flex: 1, height: 4, borderRadius: 4, backgroundColor: i < missionIndex ? c.green : i === missionIndex ? c.lavender : c.raised }} />)}</View>
+        </View>}
         <T variant="title">
           {challenge === "memory"
-            ? "A moment of focus."
+            ? "Match the pairs"
             : challenge === "shake"
-              ? "Shake off the sleep."
-              : "Rise, shine & solve."}
+              ? "Shake to wake"
+              : "Solve the math"}
         </T>
-        <T style={{ color: c.muted }}>One small win to start your morning.</T>
       </View>
-      {completed ? (
+      {completed || !mission ? (
         <>
           <T variant="heading">You did it.</T>
           <Button
             title="Finish waking up"
+            haptic={false}
             loading={busy}
             onPress={() => void complete().catch(() => {})}
           />
         </>
       ) : challenge === "memory" ? (
         <MemoryGame
+          key={`memory-${missionIndex}`}
           difficulty={level}
-          onDone={() => void complete().catch(() => {})}
+          onDone={nextMission}
         />
       ) : challenge === "shake" ? (
         <ShakeGame
+          key={`shake-${missionIndex}`}
           difficulty={level}
           isPreview={isPreview}
           onFallback={() => setFallback(true)}
-          onDone={() => void complete().catch(() => {})}
+          onDone={nextMission}
         />
       ) : (
         <MathGame
+          key={`math-${missionIndex}-${fallback}`}
           difficulty={level}
-          onDone={() => void complete().catch(() => {})}
+          onDone={nextMission}
         />
       )}
       {!isPreview && (
-        <Tap disabled={busy} onPress={() => void complete().catch(() => {})}>
+        <Tap disabled={busy} haptic={false} onPress={() => void complete().catch(() => {})}>
           <T variant="small" style={{ color: c.faint, textAlign: "center" }}>
             I need to stop this alarm
           </T>
@@ -645,12 +651,8 @@ export function Success() {
         justifyContent: "center",
       }}
     >
-      <Enter>
-        <Image
-          source={require("../../assets/art/sprout.png")}
-          contentFit="cover"
-          style={{ width: "100%", aspectRatio: 1, borderRadius: 28 }}
-        />
+      <Enter style={{ alignItems: "center" }}>
+        <ClayMotion name="bloom" size={300} loop={false} />
       </Enter>
       <Enter delay={100} style={{ alignItems: "center", gap: 13 }}>
         <View

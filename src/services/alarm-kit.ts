@@ -10,6 +10,7 @@ export type AlarmKitBridge = {
     minute: number;
     days: number[];
     label: string;
+    soundName?: string;
     timestamp?: number;
   }): Promise<void>;
   cancel(id: string): Promise<void>;

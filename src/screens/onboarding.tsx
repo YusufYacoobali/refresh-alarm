@@ -1,197 +1,121 @@
-import React, { useState } from "react";
-import { View, StyleSheet, useWindowDimensions } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, ScrollView, useWindowDimensions } from "react-native";
+import { router } from "expo-router";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useReducedMotion } from "react-native-reanimated";
-import { T, Tap, Button, Enter, Icon } from "@/components/ui";
+import Animated, { Extrapolation, interpolate, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
+import { useMotion, easeOut } from "@/components/motion";
+import { ClayMotion } from "@/components/clay-motion";
+import { ClayMotionProps } from "@/components/clay-motion.sources";
+import { OnboardingButton } from "@/components/onboarding-button";
+import { T, Tap, Icon } from "@/components/ui";
 import { art, colors as c } from "@/theme";
 import { useApp } from "@/state/app-state";
 import { requestPermission } from "@/services/scheduler";
+import { haptic, withHapticFeedback } from "@/services/haptics";
 
-const steps = [
-  {
-    eyebrow: "A LITTLE NIGHT. A LITTLE LIGHT.",
-    title: "A kinder way\nto wake up.",
-    description: "More than an alarm.\nA brighter you.",
-    image: art.moon,
-  },
-  {
-    eyebrow: "MAKE ROOM FOR GOOD MORNINGS",
-    title: "Small rituals.\nBrighter days.",
-    description:
-      "A gentle start, a clearer mind,\nand a little moment just for you.",
-    image: art.valley,
-  },
-  {
-    eyebrow: "WAKE UP YOUR WAY",
-    title: "Give your mind\na little sunshine.",
-    description:
-      "Solve a puzzle, find a matching pair,\nor shake off the sleep. You choose.",
-    image: art.moon,
-  },
-  {
-    eyebrow: "WE’LL BE HERE IN THE MORNING",
-    title: "Rest easy.\nWe’ve got the wake-up.",
-    description:
-      "Allow alarms so Daybreak can let you\nknow when your new day begins.",
-    image: art.valley,
-  },
+const steps: { eyebrow: string; title: string; description: string; scene: ClayMotionProps["name"] }[] = [
+  { eyebrow: "A LITTLE NIGHT. A LITTLE LIGHT.", title: "A kinder way\nto wake up.", description: "A soft landing at night.\nA little sunshine in the morning.", scene: "moon" },
+  { eyebrow: "YOUR MORNING, YOUR WAY", title: "Make room for\na brighter day.", description: "Choose your time, your sound,\nand the mornings that matter.", scene: "sunrise" },
+  { eyebrow: "SMALL WINS. WIDE-AWAKE YOU.", title: "Wake your mind.\nFind your spark.", description: "Mix math, memory, and movement.\nSet the difficulty for each mission.", scene: "memory" },
+  { eyebrow: "READY WHEN MORNING COMES", title: "Rest easy.\nWe’ll be here.", description: "Allow alarms so Refresh can\nlet you know it’s time to rise.", scene: "clock" },
 ];
+function Page({ index, width, height, active, offset }: { index: number; width: number; height: number; active: boolean; offset: ReturnType<typeof useSharedValue<number>> }) {
+  const { reduced } = useMotion();
+  const page = steps[index];
+  const artSize = Math.min(width - 28, Math.max(195, height * .39));
+  const artStyle = useAnimatedStyle(() => {
+    const distance = (offset.get() - index * width) / width;
+    return { opacity: interpolate(Math.abs(distance), [0, 1], [1, .2], Extrapolation.CLAMP), transform: [{ translateX: reduced ? 0 : distance * width * .18 }, { scale: reduced ? 1 : interpolate(Math.abs(distance), [0, 1], [1, .88], Extrapolation.CLAMP) }] };
+  });
+  return <View style={{ width, flex: 1 }} aria-hidden={!active} accessibilityElementsHidden={!active} importantForAccessibility={active ? "auto" : "no-hide-descendants"}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 26, paddingBottom: 16, gap: 16 }}>
+      <Animated.View style={[{ alignItems: "center" }, artStyle]}>
+        {index < 2 ? <View style={{ width: width - 28, height: artSize, overflow: "hidden" }}>
+          <Image testID={`onboarding-artwork-${index + 1}`} source={index === 0 ? art.moon : art.valley}
+            contentFit={index === 0 ? "contain" : "cover"} contentPosition={index === 0 ? "center" : "bottom"}
+            accessible={false} style={{ width: "100%", height: "100%" }} />
+          <LinearGradient pointerEvents="none" colors={[c.bg, "transparent", "transparent", c.bg]} locations={[0, .14, .83, 1]} style={{ position: "absolute", inset: 0 }} />
+        </View> : <ClayMotion name={page.scene} playing={active} size={artSize} />}
+      </Animated.View>
+      <View style={{ alignItems: "center", gap: 12 }}>
+        <T variant="eyebrow" style={{ color: c.peach, fontSize: 10, textAlign: "center" }}>{page.eyebrow}</T>
+        <T variant="title" style={{ textAlign: "center", fontSize: width < 350 ? 29 : 35, lineHeight: width < 350 ? 36 : 43 }}>{page.title}</T>
+        <T style={{ textAlign: "center", color: c.muted, lineHeight: 24 }}>{page.description}</T>
+      </View>
+    </ScrollView>
+  </View>;
+}
 export function Onboarding() {
-  const [step, setStep] = useState(0),
-    [pending, setPending] = useState(false),
-    [denied, setDenied] = useState(false);
-  const { update } = useApp();
+  const [step, setStep] = useState(0), [pending, setPending] = useState(false), [denied, setDenied] = useState(false), [message, setMessage] = useState<string | null>(null);
+  const { update, clearError } = useApp();
+  const { width: windowWidth, height } = useWindowDimensions();
+  const width = Math.min(windowWidth, 480);
   const inset = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  const reduced = useReducedMotion();
-  const page = steps[step];
-  async function finish(ask: boolean) {
+  const { reduced } = useMotion();
+  const pager = useRef<ScrollView>(null), selected = useRef(0);
+  const mounted = useRef(true), finishing = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const offset = useSharedValue(0);
+  const destination = useSharedValue(-1);
+  const selectPage = (next: number) => {
+    if (next !== selected.current) { selected.current = next; setStep(next); haptic("selection"); }
+  };
+  useAnimatedReaction(() => Math.max(0, Math.min(3, Math.round(offset.get() / width))), (next, previous) => {
+    if (destination.get() >= 0 && next !== destination.get()) return;
+    if (next === destination.get()) destination.set(-1);
+    if (previous !== null && next !== previous) scheduleOnRN(selectPage, next);
+  });
+  useEffect(() => { pager.current?.scrollTo({ x: selected.current * width, animated: false }); }, [width]);
+  const scroll = useAnimatedScrollHandler(event => { offset.set(event.contentOffset.x); });
+  function go(index: number) {
+    destination.set(index === selected.current ? -1 : index);
+    selected.current = index;
+    setStep(index);
+    pager.current?.scrollTo({ x: index * width, animated: !reduced });
+  }
+  async function finish(ask: boolean, settled = Promise.resolve()) {
+    if (finishing.current) return;
+    finishing.current = true;
     setPending(true);
+    setMessage(null);
     try {
       if (ask) {
         const status = await requestPermission();
-        if (status === "denied") {
-          setDenied(true);
-          return;
-        }
+        if (status === "denied") { setDenied(true); haptic("warning"); setMessage("Alarm permission is off. You can enable it later in Settings."); return; }
       }
-      await update({ onboarded: true });
-      router.replace("/(tabs)");
-    } finally {
-      setPending(false);
-    }
+      await withHapticFeedback(() => update({ onboarded: true }));
+      // Persistence starts on press; the short visual handoff has a fixed fallback
+      // and never depends on Lottie loading or its completion callback.
+      await settled;
+      if (mounted.current) router.replace("/(tabs)");
+    } catch (error) {
+      clearError();
+      setMessage(error instanceof Error ? error.message : "Couldn’t finish setup. Please try again.");
+    } finally { finishing.current = false; if (mounted.current) setPending(false); }
   }
-  return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: inset.top }}>
-      <View style={s.top}>
-        <View style={{ flexDirection: "row", gap: 7, alignItems: "center" }}>
-          <Icon name="sunny-outline" size={19} color={c.peach} />
-          <T variant="label" style={{ letterSpacing: 1 }}>
-            daybreak
-          </T>
-        </View>
-        {step > 0 && (
-          <Tap onPress={() => void finish(false).catch(() => {})}>
-            <T variant="small" style={{ color: c.muted }}>
-              Skip
-            </T>
-          </Tap>
-        )}
+  return <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: inset.top }}>
+    <View style={{ paddingHorizontal: 26, height: 58, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}><Icon name="sunny-outline" size={20} color={c.peach} /><T variant="label" style={{ letterSpacing: 1 }}>refresh</T></View>
+      {step > 0 && <Tap label="Skip onboarding" disabled={pending} haptic={false} onPress={() => void finish(false)}><T variant="small" style={{ color: c.muted }}>Skip</T></Tap>}
+    </View>
+    <Animated.ScrollView ref={pager} testID="onboarding-pager" horizontal pagingEnabled bounces={false} scrollEnabled={!pending} showsHorizontalScrollIndicator={false} onScroll={scroll} onScrollBeginDrag={() => destination.set(-1)} scrollEventThrottle={16} style={{ flex: 1 }}
+      onMomentumScrollEnd={event => { const next = Math.max(0, Math.min(3, Math.round(event.nativeEvent.contentOffset.x / width))); if (next !== selected.current) { selected.current = next; setStep(next); haptic("selection"); } }}>
+      {steps.map((_, index) => <Page key={index} index={index} width={width} height={height} active={index === step} offset={offset} />)}
+    </Animated.ScrollView>
+    <View style={{ paddingHorizontal: 26, paddingBottom: Math.max(inset.bottom, 18), gap: 12 }}>
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: 2 }}>
+        {steps.map((_, index) => <Tap key={index} label={`Onboarding step ${index + 1}`} selected={index === step} disabled={pending} onPress={() => go(index)}>
+          <View style={{ width: 37, height: 34, alignItems: "center", justifyContent: "center" }}><Animated.View style={{ width: 25, height: 6, borderRadius: 4, backgroundColor: index === step ? c.peach : c.faint, transform: [{ scaleX: index === step ? 1 : .25 }], transitionProperty: ["transform", "backgroundColor"], transitionDuration: reduced ? 0 : 220, transitionTimingFunction: easeOut }} /></View>
+        </Tap>)}
       </View>
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <Animated.View
-          style={{
-            height: Math.min(height * 0.47, 440),
-            animationName: reduced
-              ? undefined
-              : {
-                  "0%, 100%": { transform: [{ translateY: 0 }] },
-                  "50%": { transform: [{ translateY: -9 }] },
-                },
-            animationDuration: "6000ms",
-            animationIterationCount: "infinite",
-            animationTimingFunction: "ease-in-out",
-          }}
-        >
-          <Image
-            key={step}
-            source={page.image}
-            transition={250}
-            contentFit="cover"
-            contentPosition={step % 2 ? "bottom" : "center"}
-            style={{ width: "100%", height: "100%" }}
-          />
-          <LinearGradient colors={["transparent", c.bg]} style={s.fade} />
-        </Animated.View>
-        <Enter
-          key={`text-${step}`}
-          style={{ alignItems: "center", paddingHorizontal: 24, gap: 15 }}
-        >
-          <T variant="eyebrow" style={{ color: c.peach, textAlign: "center" }}>
-            {page.eyebrow}
-          </T>
-          <T
-            variant="title"
-            style={{ fontSize: 35, lineHeight: 42, textAlign: "center" }}
-          >
-            {page.title}
-          </T>
-          <T style={{ color: c.muted, textAlign: "center" }}>
-            {denied
-              ? "Alarms are off for now. You can enable them in Settings whenever you’re ready."
-              : page.description}
-          </T>
-        </Enter>
-      </View>
-      <View
-        style={{
-          padding: 28,
-          paddingBottom: Math.max(inset.bottom, 24),
-          gap: 24,
-        }}
-      >
-        <View
-          style={{ flexDirection: "row", gap: 7, justifyContent: "center" }}
-        >
-          {steps.map((_, i) => (
-            <View
-              key={i}
-              style={{
-                width: i === step ? 22 : 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: i === step ? c.peach : c.line,
-              }}
-            />
-          ))}
-        </View>
-        <Button
-          title={
-            step === 0
-              ? "Get started"
-              : step === 3
-                ? denied
-                  ? "Continue for now"
-                  : "Enable alarms"
-                : "Continue"
-          }
-          loading={pending}
-          icon="arrow-forward"
-          onPress={() =>
-            step < 3 ? setStep(step + 1) : void finish(!denied).catch(() => {})
-          }
-        />
-        {step === 0 ? (
-          <T variant="small" style={{ color: c.faint, textAlign: "center" }}>
-            YOUR MORNING, A LITTLE MORE MINDFUL
-          </T>
-        ) : step === 3 ? (
-          <Tap onPress={() => void finish(false).catch(() => {})}>
-            <T variant="small" style={{ textAlign: "center", color: c.muted }}>
-              Maybe later
-            </T>
-          </Tap>
-        ) : (
-          <Tap onPress={() => setStep(step - 1)}>
-            <T variant="small" style={{ textAlign: "center", color: c.muted }}>
-              Back
-            </T>
-          </Tap>
-        )}
+      {message && <T accessibilityLiveRegion="polite" variant="small" style={{ color: c.peach, textAlign: "center" }}>{message}</T>}
+      <OnboardingButton step={step} title={step === 0 ? "Get started" : step === 3 ? denied ? "Continue for now" : "Enable alarms" : "Continue"} pending={pending} onPress={settled => step < 3 ? go(step + 1) : void finish(!denied, settled)} />
+      <View style={{ minHeight: 30, alignItems: "center", justifyContent: "center" }}>
+        {step === 0 ? <T variant="small" style={{ color: c.faint }}>YOUR MORNING, A LITTLE MORE MINDFUL</T> : step === 3 ? <Tap disabled={pending} haptic={false} onPress={() => void finish(false)}><T variant="small" style={{ color: c.muted }}>Maybe later</T></Tap> : <Tap onPress={() => go(step - 1)}><T variant="small" style={{ color: c.muted }}>Back</T></Tap>}
       </View>
     </View>
-  );
+  </View>;
 }
-const s = StyleSheet.create({
-  top: {
-    paddingHorizontal: 28,
-    paddingTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  fade: { position: "absolute", bottom: 0, height: 70, left: 0, right: 0 },
-});
