@@ -16,22 +16,23 @@ import { useApp } from "@/state/app-state";
 import { requestPermission } from "@/services/scheduler";
 import { haptic, withHapticFeedback } from "@/services/haptics";
 
-const steps: { eyebrow: string; title: string; description: string; scene: ClayMotionProps["name"] }[] = [
-  { eyebrow: "A LITTLE NIGHT. A LITTLE LIGHT.", title: "A kinder way\nto wake up.", description: "A soft landing at night.\nA little sunshine in the morning.", scene: "moon" },
-  { eyebrow: "YOUR MORNING, YOUR WAY", title: "Make room for\na brighter day.", description: "Choose your time, your sound,\nand the mornings that matter.", scene: "sunrise" },
-  { eyebrow: "SMALL WINS. WIDE-AWAKE YOU.", title: "Wake your mind.\nFind your spark.", description: "Mix math, memory, and movement.\nSet the difficulty for each mission.", scene: "memory" },
-  { eyebrow: "READY WHEN MORNING COMES", title: "Rest easy.\nWe’ll be here.", description: "Allow alarms so Refresh can\nlet you know it’s time to rise.", scene: "clock" },
+const steps: { eyebrow: string; title: string; description: string; cta: string; scene: ClayMotionProps["name"] }[] = [
+  { eyebrow: "LESS GROGGY. MORE READY.", title: "Wake up fresh.\nFeel more you.", description: "Less “five more minutes.”\nMore time for the morning you want.", cta: "Refresh my mornings", scene: "moon" },
+  { eyebrow: "A WAKE-UP THAT FEELS LIKE YOU", title: "Your sound.\nYour fresh start.", description: "A favorite song. A familiar adhan.\nYour own photo to greet the day.", cta: "Make it mine", scene: "sunrise" },
+  { eyebrow: "BREAK THE SNOOZE LOOP", title: "Wake your mind.\nStart your day.", description: "Shake, solve, or match your way awake.\nSmall missions to help you get going.", cta: "Let’s set it up", scene: "memory" },
+  { eyebrow: "YOUR NEXT MORNING STARTS HERE", title: "Make tomorrow\na fresh start.", description: "Enable alarms, choose your time,\nand plan a morning worth getting up for.", cta: "Enable alarms", scene: "clock" },
 ];
 function Page({ index, width, height, active, offset }: { index: number; width: number; height: number; active: boolean; offset: ReturnType<typeof useSharedValue<number>> }) {
   const { reduced } = useMotion();
   const page = steps[index];
-  const artSize = Math.min(width - 28, Math.max(195, height * .39));
+  const compact = height < 700;
+  const artSize = Math.min(width - 28, compact ? Math.max(120, height * .23) : Math.max(195, height * .39));
   const artStyle = useAnimatedStyle(() => {
     const distance = (offset.get() - index * width) / width;
     return { opacity: interpolate(Math.abs(distance), [0, 1], [1, .2], Extrapolation.CLAMP), transform: [{ translateX: reduced ? 0 : distance * width * .18 }, { scale: reduced ? 1 : interpolate(Math.abs(distance), [0, 1], [1, .88], Extrapolation.CLAMP) }] };
   });
   return <View style={{ width, flex: 1 }} aria-hidden={!active} accessibilityElementsHidden={!active} importantForAccessibility={active ? "auto" : "no-hide-descendants"}>
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 26, paddingBottom: 16, gap: 16 }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 26, paddingBottom: compact ? 12 : 16, gap: compact ? 12 : 16 }}>
       <Animated.View style={[{ alignItems: "center" }, artStyle]}>
         {index < 2 ? <View style={{ width: width - 28, height: artSize, overflow: "hidden" }}>
           <Image testID={`onboarding-artwork-${index + 1}`} source={index === 0 ? art.moon : art.valley}
@@ -40,10 +41,10 @@ function Page({ index, width, height, active, offset }: { index: number; width: 
           <LinearGradient pointerEvents="none" colors={[c.bg, "transparent", "transparent", c.bg]} locations={[0, .14, .83, 1]} style={{ position: "absolute", inset: 0 }} />
         </View> : <ClayMotion name={page.scene} playing={active} size={artSize} />}
       </Animated.View>
-      <View style={{ alignItems: "center", gap: 12 }}>
+      <View style={{ alignItems: "center", gap: compact ? 10 : 12 }}>
         <T variant="eyebrow" style={{ color: c.peach, fontSize: 10, textAlign: "center" }}>{page.eyebrow}</T>
         <T variant="title" style={{ textAlign: "center", fontSize: width < 350 ? 29 : 35, lineHeight: width < 350 ? 36 : 43 }}>{page.title}</T>
-        <T style={{ textAlign: "center", color: c.muted, lineHeight: 24 }}>{page.description}</T>
+        <T style={{ textAlign: "center", color: c.muted, ...(compact ? { fontSize: 14, lineHeight: 21 } : { lineHeight: 24 }) }}>{page.description}</T>
       </View>
     </ScrollView>
   </View>;
@@ -98,7 +99,7 @@ export function Onboarding() {
   }
   return <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: inset.top }}>
     <View style={{ paddingHorizontal: 26, height: 58, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}><Icon name="sunny-outline" size={20} color={c.peach} /><T variant="label" style={{ letterSpacing: 1 }}>refresh</T></View>
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}><Icon name="sunny-outline" size={20} color={c.peach} /><T variant="label" style={{ letterSpacing: 1 }}>Refresh</T></View>
       {step > 0 && <Tap label="Skip onboarding" disabled={pending} haptic={false} onPress={() => void finish(false)}><T variant="small" style={{ color: c.muted }}>Skip</T></Tap>}
     </View>
     <Animated.ScrollView ref={pager} testID="onboarding-pager" horizontal pagingEnabled bounces={false} scrollEnabled={!pending} showsHorizontalScrollIndicator={false} onScroll={scroll} onScrollBeginDrag={() => destination.set(-1)} scrollEventThrottle={16} style={{ flex: 1 }}
@@ -112,9 +113,9 @@ export function Onboarding() {
         </Tap>)}
       </View>
       {message && <T accessibilityLiveRegion="polite" variant="small" style={{ color: c.peach, textAlign: "center" }}>{message}</T>}
-      <OnboardingButton step={step} title={step === 0 ? "Get started" : step === 3 ? denied ? "Continue for now" : "Enable alarms" : "Continue"} pending={pending} onPress={settled => step < 3 ? go(step + 1) : void finish(!denied, settled)} />
+      <OnboardingButton step={step} title={step === 3 && denied ? "Continue for now" : steps[step].cta} pending={pending} onPress={settled => step < 3 ? go(step + 1) : void finish(!denied, settled)} />
       <View style={{ minHeight: 30, alignItems: "center", justifyContent: "center" }}>
-        {step === 0 ? <T variant="small" style={{ color: c.faint }}>YOUR MORNING, A LITTLE MORE MINDFUL</T> : step === 3 ? <Tap disabled={pending} haptic={false} onPress={() => void finish(false)}><T variant="small" style={{ color: c.muted }}>Maybe later</T></Tap> : <Tap onPress={() => go(step - 1)}><T variant="small" style={{ color: c.muted }}>Back</T></Tap>}
+        {step === 0 ? <T variant="small" style={{ color: c.faint, textAlign: "center" }}>A FRESH START, EVERY DAY</T> : step === 3 ? <Tap disabled={pending} haptic={false} onPress={() => void finish(false)}><T variant="small" style={{ color: c.muted }}>Maybe later</T></Tap> : <Tap onPress={() => go(step - 1)}><T variant="small" style={{ color: c.muted }}>Back</T></Tap>}
       </View>
     </View>
   </View>;

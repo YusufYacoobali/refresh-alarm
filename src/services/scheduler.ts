@@ -2,14 +2,21 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Crypto from "expo-crypto";
 import AlarmKit from "./alarm-kit";
+import AndroidAlarm from "./android-alarm";
 import { Alarm, Registration, nextOccurrence } from "@/utils/alarms";
-import { soundFile, soundName, resolveSoundId } from "@/utils/sounds";
+import { soundFile, resolveSoundId, isCustomSound } from "@/utils/sounds";
+import { customAudioSource } from "./custom-audio";
 
 export const alarmKitAvailable = () =>
   Platform.OS === "ios" && !!AlarmKit?.isSupported();
 export async function permissionStatus() {
   if (alarmKitAvailable()) return AlarmKit!.authorizationStatus();
   if (Platform.OS === "web") return "preview";
+  if (Platform.OS === "android" && AndroidAlarm) {
+    const p = AndroidAlarm.permissions();
+    if (!p.exact) return "exact alarm permission needed";
+    if (!p.fullScreen) return "lock-screen permission needed";
+  }
   const result = await Notifications.getPermissionsAsync();
   return result.granted
     ? "authorized"
@@ -43,6 +50,10 @@ export async function cancelRegistration(r?: Registration) {
     }
     if (r.kind === "notifications")
       await Notifications.cancelScheduledNotificationAsync(id);
+    if (r.kind === "android") {
+      if (!AndroidAlarm) throw new Error("Rebuild Refresh to manage Android alarms.");
+      await AndroidAlarm.cancel(id);
+    }
   }
 }
 export async function scheduleAlarm(
@@ -56,6 +67,25 @@ export async function scheduleAlarm(
       "Alarm permission is off. Enable it in Settings, then try again. Your alarm has not been enabled.",
     );
   if (Platform.OS === "web") return { kind: "preview", ids: [] };
+  const imported = isCustomSound(alarm.sound) ? await customAudioSource(alarm.sound) : undefined;
+  if (imported && Platform.OS === "ios" && !soundFile(alarm.sound)) throw new Error("Import this sound again to prepare its iOS alarm excerpt.");
+  if (Platform.OS === "android") {
+    if (!AndroidAlarm) throw new Error("Install the updated Refresh Android build to enable lock-screen alarms.");
+    const access = AndroidAlarm.permissions();
+    if (!access.exact) {
+      await AndroidAlarm.openSettings("exact");
+      throw new Error("Enable the Alarms & reminders permission, then return and save your alarm.");
+    }
+    if (!access.fullScreen) {
+      await AndroidAlarm.openSettings("fullScreen");
+      throw new Error("Enable full-screen alarm permission, then return and save your alarm.");
+    }
+    const id = reuse?.kind === "android" ? reuse.ids[0] : Crypto.randomUUID();
+    const sound = resolveSoundId(alarm.sound);
+    const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.mp3` : soundFile(alarm.sound);
+    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
+    return { kind: "android", ids: [id] };
+  }
   if (alarmKitAvailable()) {
     const id = reuse?.kind === "alarmkit" ? reuse.ids[0] : Crypto.randomUUID();
     if (
@@ -78,14 +108,6 @@ export async function scheduleAlarm(
   const ids: string[] = [];
   const audioFile = soundFile(alarm.sound);
   const channelId = audioFile ? `alarm-${resolveSoundId(alarm.sound)}-v1` : "alarms";
-  if (Platform.OS === "android" && audioFile) await Notifications.setNotificationChannelAsync(channelId, {
-    name: `Alarms · ${soundName(alarm.sound)}`,
-    importance: Notifications.AndroidImportance.MAX,
-    sound: audioFile,
-    audioAttributes: { usage: Notifications.AndroidAudioUsage.ALARM },
-    vibrationPattern: [0, 500, 250, 500],
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
   const content: Notifications.NotificationContentInput = {
     title: alarm.label,
     body: "Time to wake up.",
@@ -134,6 +156,7 @@ export async function scheduleAlarm(
   }
 }
 export async function stopAlarm(alarm: Alarm) {
+  if (Platform.OS === "android" && AndroidAlarm) await AndroidAlarm.stop(alarm.id);
   if (alarm.registration?.kind === "alarmkit" && AlarmKit) {
     const active = await AlarmKit.getAlarms();
     for (const id of alarm.registration.ids)

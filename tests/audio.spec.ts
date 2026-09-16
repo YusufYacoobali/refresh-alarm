@@ -65,7 +65,7 @@ test("a real alarm loops its chosen sound through missions and stops on completi
     const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
     await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
   }
-  await expect(page.getByText("Look at you grow.")).toBeVisible();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
   await expect(page.locator("audio")).toHaveCount(0);
 });
 

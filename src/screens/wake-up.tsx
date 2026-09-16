@@ -103,14 +103,14 @@ export function Ringing() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Float style={{ position: "absolute", inset: -10 }} distance={5}><Image
-        source={art.valley}
+        source={alarm.wallpaper ? { uri: alarm.wallpaper } : art.valley}
         contentFit="cover"
         contentPosition="bottom"
         style={{ position: "absolute", inset: 0 }}
       /></Float>
-      <ClayMotion name="stars" size={360} style={{ position: "absolute", width: "100%", height: "65%", top: "20%" }} />
+      {!alarm.wallpaper && <ClayMotion name="stars" size={360} style={{ position: "absolute", width: "100%", height: "65%", top: "20%" }} />}
       <LinearGradient
-        colors={["#090C1866", "transparent", "#090C18"]}
+        colors={alarm.wallpaper ? ["#090C18CC", "#090C1855", "#090C18EE"] : ["#090C1866", "transparent", "#090C18"]}
         locations={[0, 0.55, 1]}
         style={{ position: "absolute", inset: 0 }}
       />
@@ -134,8 +134,8 @@ export function Ringing() {
         )}
         <T variant="eyebrow" style={{ color: c.peach }}>
           {isPreview
-            ? "A PEEK AT YOUR MORNING"
-            : "HERE COMES YOUR LITTLE BEGINNING"}
+            ? "TRY YOUR FRESH START"
+            : "YOUR FRESH START IS HERE"}
         </T>
         <T variant="heading" style={{ marginTop: 22 }}>
           {alarm.label}
@@ -162,7 +162,7 @@ export function Ringing() {
           <T variant="heading">{alarm.hour < 12 ? "AM" : "PM"}</T>
         </View>
         <View style={{ flex: 1, minHeight: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-          <ClayMotion name="sun" size={145} />
+          {!alarm.wallpaper && <ClayMotion name="sun" size={145} />}
         </View>
         <View style={{ width: "100%", gap: 16 }}>
           <AlarmSound alarm={alarm} preview={isPreview} />
@@ -201,7 +201,7 @@ export function Ringing() {
               <T variant="label">
                 {isPreview
                   ? "Close preview"
-                  : `A little longer · ${alarm.snooze} min`}
+                  : `Snooze · ${alarm.snooze} min`}
               </T>
             </View>
           </Tap>}
@@ -250,6 +250,8 @@ function MathGame({
   const [feedback, setFeedback] = useState({ revision: 0, kind: "success" as "success" | "error" });
   const responseStyle = useFeedback(feedback.revision, feedback.kind);
   const { reduced } = useMotion();
+  const { width, height } = useWindowDimensions();
+  const equationSize = Math.min(48, (width - 96) / 5);
   const choices = useMemo(
     () =>
       [question.answer, question.answer + 3, question.answer - 2].sort(
@@ -278,14 +280,16 @@ function MathGame({
     }
   }
   return (
-    <View style={{ gap: 26 }}>
+    <View style={{ gap: height < 700 ? 18 : 26 }}>
       <Progress value={count} total={3} />
       <Animated.View style={responseStyle}>
-      <Card style={{ alignItems: "center", paddingVertical: 18, gap: 12, borderColor: wrong !== null ? c.danger : c.line }}>
-        <ClayMotion name="math" size={146} />
-        <Animated.View key={`question-${count}`} entering={reduced ? undefined : FadeInDown.duration(240)}><T
+      <Card style={{ alignItems: "center", paddingVertical: height < 700 ? 14 : 18, gap: height < 700 ? 8 : 12, borderColor: wrong !== null ? c.danger : c.line }}>
+        <ClayMotion name="math" size={height < 700 ? 80 : 146} />
+        <Animated.View style={{ width: "100%" }} key={`question-${count}`} entering={reduced ? undefined : FadeInDown.duration(240)}><T
           testID="math-question"
-          style={{ fontSize: 48, fontFamily: fonts.bold }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={{ fontSize: equationSize, lineHeight: Math.ceil(equationSize * 1.35), textAlign: "center", fontFamily: fonts.bold, includeFontPadding: true }}
         >
           {question.text}
         </T></Animated.View>
@@ -308,13 +312,13 @@ function MathGame({
           >
             <Card
               style={{
-                paddingVertical: 23,
+                paddingVertical: height < 700 ? 18 : 23,
                 alignItems: "center",
                 borderColor: wrong === n ? c.danger : c.line,
                 backgroundColor: wrong === n ? "#4B2D3E" : c.raised,
               }}
             >
-              <T variant="heading">{n}</T>
+              <T variant="heading" numberOfLines={1} adjustsFontSizeToFit style={{ fontVariant: ["tabular-nums"] }}>{n}</T>
             </Card>
           </Tap>
         ))}
@@ -437,8 +441,7 @@ function ShakeGame({
   isPreview: boolean;
 }) {
   const [count, setCount] = useState(0),
-    [status, setStatus] = useState("ready"),
-    [started, setStarted] = useState(false);
+    [status, setStatus] = useState("ready");
   const counter = useRef(0),
     last = useRef(0),
     armed = useRef(true);
@@ -456,18 +459,19 @@ function ShakeGame({
     else haptic("light");
   }
   useEffect(() => {
-    if (!started || Platform.OS === "web") return;
+    if (Platform.OS === "web") return;
     let sub: ReturnType<typeof Accelerometer.addListener> | undefined;
     let cancelled = false;
     void (async () => {
       try {
         if (!(await Accelerometer.isAvailableAsync())) {
-          setStatus("unavailable");
+          if (!cancelled) setStatus("unavailable");
           return;
         }
+        if (cancelled) return;
         const permission = await Accelerometer.requestPermissionsAsync();
         if (!permission.granted) {
-          setStatus("denied");
+          if (!cancelled) setStatus("denied");
           return;
         }
         if (cancelled) return;
@@ -488,14 +492,14 @@ function ShakeGame({
         });
         setStatus("listening");
       } catch {
-        setStatus("unavailable");
+        if (!cancelled) setStatus("unavailable");
       }
     })();
     return () => {
       cancelled = true;
       sub?.remove();
     };
-  }, [started]);
+  }, []);
   return (
     <View style={{ gap: 18 }}>
       <View style={{ alignItems: "center", gap: 4 }}>
@@ -516,8 +520,6 @@ function ShakeGame({
             <Button title="Preview a shake" secondary haptic={false} onPress={register} />
           )}
         </>
-      ) : !started ? (
-        <Button title="Start shaking" onPress={() => setStarted(true)} />
       ) : (
         <T style={{ textAlign: "center", color: c.muted }}>
           {status === "listening"
@@ -536,6 +538,7 @@ function ShakeGame({
   );
 }
 export function ChallengeScreen() {
+  const { height } = useWindowDimensions();
   const { alarm, isPreview, kind, difficulty } = useWakeAlarm();
   const { finish, busy } = useApp();
   const inset = useSafeAreaInsets();
@@ -568,7 +571,7 @@ export function ChallengeScreen() {
     } else void complete().catch(() => {});
   }
   return (
-    <Screen style={{ paddingTop: inset.top + 26 }}>
+    <Screen style={{ paddingTop: inset.top + (height < 700 ? 16 : 26), gap: height < 700 ? 16 : 24 }}>
       <AlarmSound alarm={alarm} preview={isPreview} />
       <View
         style={{
@@ -668,14 +671,14 @@ export function Success() {
         >
           <Icon name="checkmark" size={28} color={c.ink} />
         </View>
-        <T variant="title">Look at you grow.</T>
+        <T variant="title">First win of the day.</T>
         <T style={{ color: c.muted, textAlign: "center" }}>
           {preview === "1"
-            ? "A lovely little practice. You’re ready."
-            : "You showed up for today.\nThat’s a beautiful place to start."}
+            ? "That’s your wake-up routine.\nMake it yours for tomorrow."
+            : "Alarm done. Morning started.\nNow make a little time for you."}
         </T>
       </Enter>
-      <Quote text="Small, consistent steps create beautiful changes." />
+      <Quote text="Let in some light. Take a stretch. Meet your morning." />
       <Button
         title="Hello, new day"
         icon="arrow-forward"

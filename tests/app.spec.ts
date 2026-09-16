@@ -61,7 +61,7 @@ test("a scheduled one-off rings, snoozes, and is disabled on completion", async 
     .getByRole("button", { name: "Hello, new day", exact: true })
     .click();
   await expect(
-    page.getByText("Look at you grow.", { exact: true }),
+    page.getByText("First win of the day.", { exact: true }),
   ).toBeVisible();
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("daybreak.state.v1")!),
@@ -108,9 +108,9 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
-  await page.getByRole("button", { name: "Get started", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh my mornings", exact: true }).click();
+  await page.getByRole("button", { name: "Make it mine", exact: true }).click();
+  await page.getByRole("button", { name: "Let’s set it up", exact: true }).click();
   await page
     .getByRole("button", { name: "Enable alarms", exact: true })
     .click();
@@ -171,9 +171,9 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page
     .getByRole("textbox", { name: "Morning journal" })
     .fill("A little more light.");
-  await page.getByRole("button", { name: /Save this little moment/ }).click();
+  await page.getByRole("button", { name: /Save my check-in/ }).click();
   await expect(
-    page.getByText("Your moment is saved", { exact: true }),
+    page.getByText("Check-in saved", { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "artifacts/screenshots/08-journal.png" });
   await expect(page.getByRole("tab", { name: "Unwind" })).toHaveCount(0);
@@ -187,7 +187,7 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
       .click();
   }
   await expect(
-    page.getByText("Look at you grow.", { exact: true }),
+    page.getByText("First win of the day.", { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "artifacts/screenshots/09-success.png" });
   await page
@@ -229,7 +229,7 @@ test("memory challenge rewards four real matching pairs", async ({ page }) => {
     if (indexes !== Object.values(pairs).at(-1)) await page.waitForTimeout(400);
   }
   await expect(
-    page.getByText("Look at you grow.", { exact: true }),
+    page.getByText("First win of the day.", { exact: true }),
   ).toBeVisible();
 });
 
@@ -242,7 +242,7 @@ test("shake preview counts motion demonstrations and offers accessible math", as
       .getByRole("button", { name: "Preview a shake", exact: true })
       .click();
   await expect(
-    page.getByText("Look at you grow.", { exact: true }),
+    page.getByText("First win of the day.", { exact: true }),
   ).toBeVisible();
   await page.goto("/challenge?id=demo&preview=1&kind=shake");
   await page.getByRole("button", { name: /Prefer not to shake/ }).click();

@@ -14,6 +14,7 @@ import { AppProvider, useApp } from "@/state/app-state";
 import { colors as c, fonts } from "@/theme";
 import { T, Button } from "@/components/ui";
 import AlarmKit from "@/services/alarm-kit";
+import AndroidAlarm from "@/services/android-alarm";
 import { MotionProvider, useMotion } from "@/components/motion";
 import { ScreenErrorLayer } from "@/components/screen-error-layer";
 
@@ -50,7 +51,7 @@ function AppContent() {
     const open = (id: string, eventId: string) => {
       if (
         displayed.current === id ||
-        seen.current.has(eventId) ||
+        (seen.current.has(eventId) && !AndroidAlarm) ||
         !snapshot.current.alarms.some((a) => a.id === id)
       )
         return;
@@ -59,6 +60,10 @@ function AppContent() {
       router.push({ pathname: "/ringing", params: { id } });
     };
     const checkNative = async () => {
+      if (AndroidAlarm) {
+        const active = AndroidAlarm.activeAlarm();
+        if (active) open(active.alarmId, active.eventId);
+      }
       if (!AlarmKit?.isSupported()) return;
       const pending = AlarmKit.consumePendingAlarm();
       if (pending)
@@ -91,6 +96,7 @@ function AppContent() {
           (alarm.nextAt ?? 0) <= +now &&
           (alarm.days.length > 0 || +now - (alarm.nextAt ?? +now) < 60000) &&
           alarm.registration?.kind !== "alarmkit" &&
+          alarm.registration?.kind !== "android" &&
           alarm.hour === now.getHours() &&
           alarm.minute === now.getMinutes() &&
           (!alarm.days.length || alarm.days.includes(now.getDay()))
@@ -98,11 +104,12 @@ function AppContent() {
           open(alarm.id, `${alarm.id}-${Math.floor(+now / 60000)}`);
       if (
         state.snoozed &&
+        state.snoozed.registration.kind !== "android" &&
         +now >= state.snoozed.at &&
         +now - state.snoozed.at < 60000
       )
         open(state.snoozed.alarmId, `snooze-${state.snoozed.at}`);
-      if (AlarmKit?.isSupported() && now.getSeconds() % 5 === 0)
+      if (AndroidAlarm || (AlarmKit?.isSupported() && now.getSeconds() % 5 === 0))
         void checkNative().catch(() => {});
     }, 1000);
     if (Platform.OS === "web")

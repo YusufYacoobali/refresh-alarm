@@ -9,7 +9,7 @@ test("each onboarding CTA plays its own one-shot animation and ignores duplicate
   });
   await page.goto("/onboarding");
   for (const [index, name] of ["buttonStarlight", "buttonSunrise", "buttonMatch", "buttonBell"].entries()) {
-    const button = page.getByRole("button", { name: index === 0 ? "Get started" : index === 3 ? "Enable alarms" : "Continue", exact: true });
+    const button = page.getByRole("button", { name: ["Refresh my mornings", "Make it mine", "Let’s set it up", "Enable alarms"][index], exact: true });
     await expect(button).toBeEnabled();
     // Duplicate clicks model queued input without waiting for the disabled CTA.
     await button.evaluate(el => { (el as HTMLElement).click(); (el as HTMLElement).click(); });
@@ -41,9 +41,9 @@ test("reduced motion skips button travel and a failed finish remains retryable",
     };
   });
   await page.goto("/onboarding");
-  await page.getByRole("button", { name: "Get started", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh my mornings", exact: true }).click();
+  await page.getByRole("button", { name: "Make it mine", exact: true }).click();
+  await page.getByRole("button", { name: "Let’s set it up", exact: true }).click();
   await expect(page.locator('[data-motion^="button"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Enable alarms", exact: true }).click();
   await expect(page.getByText("Could not save setup", { exact: true })).toBeVisible();
@@ -58,7 +58,7 @@ test("onboarding shows original artwork, slides smoothly, and pauses inactive Lo
   const memory = page.locator('[data-motion="memory"]');
   await expect(memory).toHaveAttribute("data-playing", "false");
   await page.screenshot({ path: "artifacts/refinement/onboarding-1.png" });
-  await page.getByRole("button", { name: "Get started", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh my mornings", exact: true }).click();
   await expect(page.getByTestId("onboarding-artwork-2")).toBeInViewport();
   await expect.poll(() => page.getByTestId("onboarding-pager").evaluate(el => el.scrollLeft)).toBe(390);
   await page.screenshot({ path: "artifacts/refinement/onboarding-2.png" });
@@ -74,5 +74,5 @@ test("onboarding shows original artwork, slides smoothly, and pauses inactive Lo
   await expect(clock).toHaveAttribute("data-playing", "false");
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(page.getByRole("button", { name: "Enable alarms", exact: true })).toBeInViewport();
-  await expect(page.getByText("Rest easy.", { exact: false })).toBeInViewport();
+  await expect(page.getByText("Make tomorrow", { exact: false })).toBeInViewport();
 });

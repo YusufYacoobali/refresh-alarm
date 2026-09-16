@@ -1,6 +1,6 @@
 # Refresh
 
-A gentle alarm app built with **Expo SDK 57, React Native, and TypeScript**. The supplied reference drives the midnight palette, clay illustrations, peach buttons, lavender surfaces, and scrolling time wheels.
+Refresh helps you build a wake-up routine for a fresher start, with personal sounds, backgrounds, and missions to get your mind and body going. Built with **Expo SDK 57, React Native, and TypeScript**. The supplied reference drives the midnight palette, clay illustrations, peach buttons, lavender surfaces, and scrolling time wheels.
 
 ## Run
 
@@ -13,21 +13,21 @@ npm run web
 npx expo start --go
 ```
 
-The browser preview runs at the URL printed by Expo. Browser alarms are explicitly previews and only work while the page is open. Start with onboarding, create an alarm, or use **Home → Try your morning experience** to explore the wake-up flow immediately.
+The browser preview runs at the URL printed by Expo. Browser alarms are explicitly previews and only work while the page is open. Start with onboarding, create an alarm, or use **Home → Try your wake-up routine** to explore the wake-up flow immediately.
 
 ## Included
 
 - Four-step swipeable onboarding with original Lottie scenes and a contextual alarm permission request.
 - Persisted alarm creation, editing, enabling/disabling, deletion, repeat days, AM/PM, labels, and snooze Off / 5 / 10 / 15 minutes. Saving has a fixed action, inline errors, and a confirmation.
 - Local **Swift AlarmKit module for iOS 26+**: authorization, relative/weekly and fixed scheduling, cancellation, stop, state lookup, and an App Intent that opens the relevant wake-up screen after a cold launch.
-- Local notification fallback on older iOS and Android, with a high-importance Android alarm channel.
+- Native Android alarm-clock scheduling, continuous foreground-service audio, vibration, full-screen lock-screen intent, restart recovery, and exact/full-screen permission settings. Older iOS uses local notifications.
 - Math puzzles, shuffled memory pairs, and accelerometer shake detection. Combine all three in an ordered sequence, with Easy/Hard difficulty for each, progress, haptics, and an accessible math alternative.
-- Six illustrated sound preferences, three visual themes, and a private on-device morning journal.
+- Seventeen sound choices, personal photo backgrounds per alarm, three visual themes, and a private on-device morning journal. Shake missions listen automatically; math layouts adapt to small screens.
 - Reanimated feedback and clay illustration motion, reduced-motion support, safe areas, scrollable forms, and native SF Symbols on iOS.
 - Thirteen original, offline Lottie scenes, including four distinct onboarding button animations, 3D memory flips, math feedback, responsive shake animation, scrolling time wheels, and motion across buttons, selections, onboarding, and tabs.
 - A test-alarm action in Settings and explicit permission/fallback status.
 
-**17 supplied sounds are included**, with 15 alarm tones and an Islamic section containing two adhans. Both adhans play in full inside the app. The selected sound is also configured for AlarmKit and local notifications using PCM WAV excerpts of up to 29 seconds. Original files stay in `assets/audio`; `scripts/prepare-audio.cjs` generates system resources and the catalog. Rebuild native clients to bundle new sounds. Automatic prayer-time calculation and location-based scheduling are not implemented. See `docs/audio.md`.
+**17 supplied sounds are included**, with 15 alarm tones and an Islamic section containing two adhans. Both adhans play in full inside the app and through the Android native alarm service. iOS AlarmKit and local notifications use PCM WAV excerpts of up to 29 seconds. Original files stay in `assets/audio`; `scripts/prepare-audio.cjs` generates system resources and the catalog. Rebuild native clients to bundle new sounds. Automatic prayer-time calculation and location-based scheduling are not implemented. See `docs/audio.md`.
 
 ## iOS AlarmKit development build
 
@@ -42,7 +42,7 @@ npx expo run:ios --device
 
 Apple keeps a system Stop action available. Challenges guide the in-app wake-up flow; they cannot enforce completion from the lock screen. Refresh's in-app snooze schedules a new fixed alarm, so this version doesn't require a countdown Live Activity extension. See [Apple's AlarmKit walkthrough](https://developer.apple.com/videos/play/wwdc2025/230/) and [AlarmManager documentation](https://developer.apple.com/documentation/alarmkit/alarmmanager).
 
-On Android and earlier iOS, this version provides notification-based reminders, not an Android alarm-clock service. Focus, channel settings, exact-alarm permission, and battery restrictions can affect those alerts. The app explains this fallback in Settings. No remote push server is needed.
+Android uses `modules/refresh-alarm`: `AlarmManager.setAlarmClock`, a media-playback foreground service on the alarm audio stream, and a full-screen intent opening the app over the lock screen. Native playback continues through missions and stops on completion or snooze. `plugins/with-refresh-alarm.cjs` configures the activity and bundles full adhan recordings. Enable notifications, Alarms & reminders, and Lock-screen alarms in Settings. Existing future notification-based alarms migrate once permissions are granted. Build again with `npx expo run:android`; Expo Go and previously installed builds cannot load this native module. See [Android checks](docs/android-alarms.md).
 
 ## Verification
 

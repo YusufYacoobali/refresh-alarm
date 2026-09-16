@@ -25,7 +25,7 @@ test("math outcomes each emit one haptic, including final completion", async ({ 
     await page.getByRole("button", { name: `Answer ${await answer()}`, exact: true }).click();
     if (i < 2) await expect(page.getByText(`${i + 1} of 3`)).toBeVisible();
   }
-  await expect(page.getByText("Look at you grow.")).toBeVisible();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
   expect(await calls(page)).toEqual([[60, 100, 60, 100, 60], [40, 100, 40], [40, 100, 40], [40, 100, 40]]);
 });
 
@@ -33,7 +33,7 @@ test("shake progress has one pulse per shake and one final celebration", async (
   await recordHaptics(page);
   await page.goto("/challenge?id=demo&preview=1&kind=shake");
   for (let i = 0; i < 12; i++) await page.getByRole("button", { name: "Preview a shake" }).click();
-  await expect(page.getByText("Look at you grow.")).toBeVisible();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
   expect(await calls(page)).toEqual([...Array.from({ length: 11 }, () => [40]), [40, 100, 40]]);
 });
 

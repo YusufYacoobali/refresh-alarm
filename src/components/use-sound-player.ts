@@ -3,7 +3,8 @@ import { AppState } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { audioSources } from "@/data/audio-sources";
-import { resolveSoundId, soundName, SoundId } from "@/utils/sounds";
+import { resolveSoundId, soundName, SoundId, isCustomSound } from "@/utils/sounds";
+import { customAudioSource } from "@/services/custom-audio";
 
 export function useSoundPlayer() {
   const player = useAudioPlayer(null);
@@ -24,8 +25,9 @@ export function useSoundPlayer() {
     const request = revision.current;
     try {
       await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: loop, interruptionMode: "doNotMix" });
+      const source = isCustomSound(resolved) ? { uri: (await customAudioSource(resolved)).uri } : audioSources[resolved];
       if (request !== revision.current) return;
-      player.replace(audioSources[resolved]); player.loop = loop; player.volume = loop ? 1 : .7;
+      player.replace(source); player.loop = loop; player.volume = loop ? 1 : .7;
       looping.current = loop;
       if (loop) player.setActiveForLockScreen(true, { title: soundName(id), artist: "Refresh alarm" });
       player.play(); setPlaying(resolved);

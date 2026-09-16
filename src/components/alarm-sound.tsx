@@ -5,12 +5,15 @@ import { resolveSoundId } from "@/utils/sounds";
 import { stopAlarm } from "@/services/scheduler";
 import { useSoundPlayer } from "./use-sound-player";
 import { Button } from "./ui";
+import AndroidAlarm from "@/services/android-alarm";
 
 export function AlarmSound({ alarm, preview }: { alarm: Alarm; preview: boolean }) {
   const { play, stop, error } = useSoundPlayer();
   const [handoffError, setHandoffError] = useState(false);
   const latest = useRef(alarm); latest.current = alarm;
   useFocusEffect(useCallback(() => {
+    // Android's foreground service owns playback across screens and app backgrounding.
+    if (AndroidAlarm && !preview) return;
     if (resolveSoundId(alarm.sound) === "system") return;
     let cancelled = false;
     const start = async () => {

@@ -1,9 +1,10 @@
-import { resolveSoundId } from "@/utils/sounds";
+import { isCustomSound, resolveSoundId } from "@/utils/sounds";
+import { importAudio } from "@/services/custom-audio";
 import { useSoundPlayer } from "@/components/use-sound-player";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { withHapticFeedback } from "@/services/haptics";
+import { haptic, withHapticFeedback } from "@/services/haptics";
 import React, { useState } from "react";
-import { View, useWindowDimensions } from "react-native";
+import { View, Platform, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -26,19 +27,41 @@ import { ClayMotion } from "@/components/clay-motion";
 
 export function Sounds() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
-  const { draft, updateDraft } = useApp();
+  const { data, draft, updateDraft, addCustomSound } = useApp();
   const [selected, setSelected] = useState<SoundId>(resolveSoundId(draft?.sound ?? "lofi"));
-  const [section, setSection] = useState(() => sounds.find(s => s.id === resolveSoundId(draft?.sound ?? "lofi"))?.category === "Islamic" ? "Islamic" : "Alarm tones");
+  const [section, setSection] = useState(() => isCustomSound(selected) ? "Custom" : sounds.find(s => s.id === selected)?.category === "Islamic" ? "Islamic" : "Alarm tones");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string>();
   const { play, stop, playing, error } = useSoundPlayer();
   const insets = useSafeAreaInsets();
+  const visibleSounds = section === "Custom"
+    ? (data.customSounds ?? []).map(sound => ({ ...sound, category: "Custom" }))
+    : sounds.filter(sound => (sound.category === "Islamic") === (section === "Islamic"));
+  async function importSound() {
+    if (importing) return;
+    stop(); setImportError(undefined); setImporting(true);
+    try {
+      const sound = await importAudio();
+      if (sound) { await addCustomSound(sound); setSelected(sound.id); haptic("success"); }
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Couldn’t import this audio. Please try again.");
+      haptic("error");
+    } finally { setImporting(false); }
+  }
   return <View style={{ flex: 1, backgroundColor: c.bg }}><Screen style={{ gap: 18 }}>
     <Heading title="Alarm sounds" subtitle="Tap play to listen." />
-    <View style={{ flexDirection: "row", gap: 10 }}>
-      {["Alarm tones", "Islamic"].map(name => <Chip key={name} title={name} active={section === name} onPress={() => { stop(); setSection(name); }} />)}
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {["Alarm tones", "Islamic", "Custom"].map(name => <Chip key={name} title={name} active={section === name} onPress={() => { stop(); setSection(name); }} />)}
     </View>
+    {section === "Custom" && <View style={{ gap: 12 }}>
+      <Button title="Import audio" icon="add" secondary loading={importing} onPress={() => void importSound()} />
+      <T variant="small" style={{ color: c.muted }}>MP3, M4A, WAV and more · up to 50 MB</T>
+      {importError && <T accessibilityLiveRegion="polite" style={{ color: c.peach }}>{importError}</T>}
+      {!visibleSounds.length && <Card style={{ padding: 24, alignItems: "center", gap: 10 }}><Icon name="musical-notes-outline" color={c.lavender} size={28} /><T style={{ color: c.muted }}>No custom sounds yet.</T></Card>}
+    </View>}
     {error && <T accessibilityLiveRegion="polite" style={{ color: c.peach }}>{error}</T>}
-    <Card>
-      {sounds.filter(sound => (sound.category === "Islamic") === (section === "Islamic")).map(sound => <View key={sound.id} style={{ flexDirection: "row", alignItems: "center", paddingRight: 14, borderBottomWidth: 1, borderBottomColor: c.line }}>
+    {!!visibleSounds.length && <Card>
+      {visibleSounds.map(sound => <View key={sound.id} style={{ flexDirection: "row", alignItems: "center", paddingRight: 14, borderBottomWidth: 1, borderBottomColor: c.line }}>
         <Tap label={`Select ${sound.name}`} selected={selected === sound.id} style={{ flex: 1 }} onPress={() => { setSelected(sound.id); stop(); }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 16 }}>
             <Icon name={selected === sound.id ? "checkmark-circle" : "ellipse-outline"} color={selected === sound.id ? c.lavender : c.faint} />
@@ -49,19 +72,20 @@ export function Sounds() {
           <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: playing === sound.id ? c.lavender : c.raised }}><Icon name={playing === sound.id ? "stop" : "play"} size={18} color={playing === sound.id ? c.ink : c.lavender} /></View>
         </Tap>
       </View>)}
-    </Card>
-    {section === "Islamic" && <T variant="small" style={{ color: c.muted }}>Full adhan in the app. System alerts use a 29-second excerpt.</T>}
+    </Card>}
+    {section === "Custom" && Platform.OS === "ios" && <T variant="small" style={{ color: c.muted }}>Full audio in the app. System alerts use the first 29 seconds.</T>}
+    {section === "Islamic" && <T variant="small" style={{ color: c.muted }}>{Platform.OS === "android" ? "Full adhan for your alarm, including on the lock screen." : "Full adhan in the app. iOS system alerts use a 29-second excerpt."}</T>}
     <Tap label="Device default" selected={selected === "system"} onPress={() => { setSelected("system"); stop(); }}>
       <Card style={{ padding: 18, flexDirection: "row", gap: 12, alignItems: "center" }}><Icon name={selected === "system" ? "checkmark-circle" : "ellipse-outline"} /><T>Device default</T></Card>
     </Tap>
   </Screen>
-  {editing && <View style={{ padding: 20, paddingBottom: Math.max(20, insets.bottom), borderTopWidth: 1, borderTopColor: c.line }}><Button title="Use this sound" onPress={() => { stop(); updateDraft({ sound: selected }); router.back(); }} /></View>}
+  {editing && <View style={{ padding: 20, paddingBottom: Math.max(20, insets.bottom), borderTopWidth: 1, borderTopColor: c.line }}><Button title="Use this sound" loading={importing} onPress={() => { stop(); updateDraft({ sound: selected }); router.back(); }} /></View>}
   </View>;
 }
 const challenges: { id: Mission["kind"]; name: string; subtitle: string }[] = [
-  { id: "math", name: "Math puzzle", subtitle: "Give your mind a little spark." },
-  { id: "memory", name: "Memory match", subtitle: "Find the friends that belong together." },
-  { id: "shake", name: "Shake to wake", subtitle: "A little movement to start the day." },
+  { id: "math", name: "Math puzzle", subtitle: "Get your brain into gear." },
+  { id: "memory", name: "Memory match", subtitle: "A little focus before the day begins." },
+  { id: "shake", name: "Shake to wake", subtitle: "Get moving. Get your morning going." },
 ];
 export function Challenges() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
@@ -72,7 +96,7 @@ export function Challenges() {
     if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
   }
   return <Screen style={{ gap: 22 }}>
-    <Heading title="Build your wake-up" subtitle="Pick one or more missions. Complete them in the order you choose." />
+    <Heading title="Get past snooze" subtitle="Build a wake-up that gets you going. Choose your missions and difficulty." />
     <Card style={{ padding: 16, gap: 8 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>{selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
       <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${challenges.find(c => c.id === m.kind)!.name}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
@@ -117,8 +141,8 @@ export function Themes() {
   return (
     <Screen>
       <Heading
-        title="Set the feeling."
-        subtitle="A small world to make your own."
+        title="Your morning view"
+        subtitle="Choose the scene that greets your fresh start."
       />
       {(
         [

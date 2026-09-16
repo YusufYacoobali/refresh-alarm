@@ -321,7 +321,7 @@ export function SoundArt({
   );
 }
 export function Quote({
-  text = "A calm mind makes a brighter tomorrow.",
+  text = "Your morning deserves more than another snooze.",
 }: {
   text?: string;
 }) {

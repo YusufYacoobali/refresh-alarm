@@ -9,6 +9,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import { AppState, Platform } from "react-native";
 import AlarmKit from "@/services/alarm-kit";
+import AndroidAlarm from "@/services/android-alarm";
+import { CustomSound, setCustomSounds } from "@/utils/sounds";
 import {
   Alarm,
   Registration,
@@ -29,6 +31,7 @@ type Data = {
   theme: "serene" | "moonlight" | "ocean";
   journal: JournalEntry[];
   completions: string[];
+  customSounds?: CustomSound[];
   snoozed?: { alarmId: string; at: number; registration: Registration };
 };
 const initial: Data = {
@@ -68,6 +71,7 @@ type Context = {
   saveAlarm(alarm: Alarm): Promise<void>;
   deleteAlarm(alarm: Alarm): Promise<void>;
   update(patch: Partial<Data>): Promise<void>;
+  addCustomSound(sound: CustomSound): Promise<void>;
   finish(alarm: Alarm): Promise<void>;
   snooze(alarm: Alarm): Promise<void>;
 };
@@ -95,6 +99,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         )
           throw new Error("Saved data could not be read.");
         parsed.alarms.forEach(validateAlarm);
+        if (parsed.customSounds && !Array.isArray(parsed.customSounds)) throw new Error("Saved sounds could not be read.");
+        setCustomSounds(parsed.customSounds ?? []);
         current.current = parsed;
         setData(parsed);
       }
@@ -110,6 +116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   async function persist(next: Data) {
     await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    setCustomSounds(next.customSounds ?? []);
     current.current = next;
     setData(next);
   }
@@ -135,6 +142,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           !system.some((s) => alarm.registration!.ids.includes(s.id));
         const expiredFallback =
           alarm.registration?.kind !== "alarmkit" &&
+          alarm.registration?.kind !== "android" &&
           !!alarm.nextAt &&
           Date.now() > alarm.nextAt + 60000;
         return missingNative || expiredFallback
@@ -283,6 +291,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw e;
       }
     });
+  useEffect(() => {
+    if (!ready || !AndroidAlarm) return;
+    let migrating = false;
+    const migrate = async () => {
+      const access = AndroidAlarm!.permissions();
+      if (migrating || locked.current || !access.exact || !access.fullScreen || AndroidAlarm!.activeAlarm()) return;
+      migrating = true;
+      try {
+        for (const alarm of current.current.alarms) {
+          if (alarm.enabled && alarm.registration?.kind !== "android" && current.current.snoozed?.alarmId !== alarm.id &&
+              (alarm.days.length > 0 || !alarm.nextAt || alarm.nextAt > Date.now())) await saveAlarm(alarm);
+        }
+      } catch { /* The existing transaction error exposes failures without losing saved alarms. */ }
+      finally { migrating = false; }
+    };
+    void migrate();
+    const sub = AppState.addEventListener("change", state => { if (state === "active") void migrate(); });
+    return () => sub.remove();
+  }, [ready]);
   return (
     <Ctx.Provider
       value={{
@@ -296,6 +323,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         edit: (a) => setDraft(a ? { ...a, days: [...a.days] } : newAlarm()),
         updateDraft: (patch) => setDraft((d) => (d ? { ...d, ...patch } : d)),
         update,
+        addCustomSound: (sound) => transaction(() => persist({ ...current.current, customSounds: [...(current.current.customSounds ?? []), sound] })),
         saveAlarm,
         deleteAlarm,
         finish,

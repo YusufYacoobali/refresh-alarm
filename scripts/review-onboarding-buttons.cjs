@@ -10,14 +10,14 @@ const fs = require('node:fs');
   const base = process.env.DAYBREAK_TEST_URL ?? 'http://127.0.0.1:8082';
   await page.goto(base + '/onboarding');
   for (let i = 0; i < 4; i++) {
-    await page.getByRole('button', { name: i === 0 ? 'Get started' : i === 3 ? 'Enable alarms' : 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: ["Refresh my mornings", "Make it mine", "Let’s set it up", "Enable alarms"][i], exact: true }).click();
     await page.waitForTimeout(220);
     await page.screenshot({ path: `${out}/press-${i + 1}.png` });
     await page.waitForTimeout(800);
   }
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto(base + '/onboarding');
-  await page.getByRole('button', { name: 'Get started', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh my mornings', exact: true }).click();
   await page.waitForTimeout(220);
   await page.screenshot({ path: `${out}/small-press.png` });
   await context.close();

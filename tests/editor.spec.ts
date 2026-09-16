@@ -127,7 +127,7 @@ test("the full mission sequence finishes only after the last mission", async ({ 
     const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
     await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
   }
-  await expect(page.getByText("Look at you grow.")).toBeVisible();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!));
   expect(after.completions).toHaveLength(1);
   expect(after.alarms[0].enabled).toBe(false);

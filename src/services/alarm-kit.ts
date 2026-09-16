@@ -3,6 +3,7 @@ export type AlarmKitBridge = {
   isSupported(): boolean;
   authorizationStatus(): string;
   requestAuthorization(): Promise<string>;
+  prepareCustomSound(uri: string, id: string): Promise<string>;
   schedule(input: {
     id: string;
     alarmId: string;

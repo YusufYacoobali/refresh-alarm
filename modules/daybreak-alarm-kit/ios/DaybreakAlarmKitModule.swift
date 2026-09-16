@@ -4,6 +4,7 @@ import AlarmKit
 import SwiftUI
 import AppIntents
 import ActivityKit
+import AVFoundation
 
 struct DaybreakAlarmInput: Record {
   @Field var id: String = ""
@@ -36,6 +37,23 @@ public struct OpenDaybreakIntent: LiveActivityIntent {
 public class DaybreakAlarmKitModule: Module {
   public func definition() -> ModuleDefinition {
     Name("DaybreakAlarmKit")
+    AsyncFunction("prepareCustomSound") { (uri: String, value: String) throws -> String in
+      guard let id = UUID(uuidString: value), let url = URL(string: uri), url.isFileURL else { throw Self.error("Invalid imported audio file.") }
+      let files = FileManager.default
+      let documents = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+      guard url.standardizedFileURL.path.hasPrefix(documents.path + "/custom-audio/") else { throw Self.error("Choose a sound from your imported audio.") }
+      let source = try AVAudioFile(forReading: url)
+      let format = source.processingFormat
+      let frames = AVAudioFrameCount(min(source.length, AVAudioFramePosition(format.sampleRate * 29)))
+      guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { throw Self.error("This audio file is empty.") }
+      try source.read(into: buffer, frameCount: frames)
+      let folder = try files.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Sounds", isDirectory: true)
+      try files.createDirectory(at: folder, withIntermediateDirectories: true)
+      let name = "refresh_custom_\(id.uuidString.lowercased()).wav"
+      let output = try AVAudioFile(forWriting: folder.appendingPathComponent(name), settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: format.sampleRate, AVNumberOfChannelsKey: format.channelCount, AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false])
+      try output.write(from: buffer)
+      return name
+    }
     Function("isSupported") { () -> Bool in
       if #available(iOS 26.0, *) { return true }
       return false
@@ -75,9 +93,11 @@ public class DaybreakAlarmKitModule: Module {
       // Snooze is a new fixed alarm. No countdown / Live Activity extension is needed.
       let sound: AlertConfiguration.AlertSound
       if let name = input.soundName {
-        guard name.hasPrefix("daybreak_"), name.hasSuffix(".wav"),
-              !name.contains("/"), Bundle.main.url(forResource: name, withExtension: nil) != nil
-        else { throw Self.error("This alarm sound is missing. Rebuild Refresh with its audio assets.") }
+        let library = try FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: false).appendingPathComponent("Sounds").appendingPathComponent(name)
+        let bundled = name.hasPrefix("daybreak_") && Bundle.main.url(forResource: name, withExtension: nil) != nil
+        let imported = name.hasPrefix("refresh_custom_") && FileManager.default.fileExists(atPath: library.path)
+        guard name.hasSuffix(".wav"), !name.contains("/"), bundled || imported
+        else { throw Self.error("This alarm sound is missing. Import it again or choose another sound.") }
         sound = .named(name)
       } else { sound = .default }
       let configuration = AlarmManager.AlarmConfiguration<DaybreakMetadata>.alarm(

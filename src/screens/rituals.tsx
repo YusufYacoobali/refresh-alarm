@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import { useSceneMotion } from "@/components/motion";
 import { ClayMotion } from "@/components/clay-motion";
+import AndroidAlarm from "@/services/android-alarm";
+import { AndroidAlarmSettings } from "@/components/android-alarm-settings";
 import {
   Screen,
   T,
@@ -167,11 +169,11 @@ export function Journal() {
   return (
     <Screen style={{ paddingTop: inset.top + 28 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>
-        YOUR LITTLE CHECK-IN
+        FIND YOUR MORNING RHYTHM
       </T>
       <Heading
         title="How’s your morning?"
-        subtitle="No right answer. Just a moment to notice."
+        subtitle="Rested or still groggy? Notice what works for you."
       />
       <View style={{ flexDirection: "row", gap: 8 }}>
         {moods.map((m) => (
@@ -203,12 +205,13 @@ export function Journal() {
           </Tap>
         ))}
       </View>
+      <AndroidAlarmSettings />
       <Card style={{ padding: 20, gap: 12 }}>
-        <T variant="label">One thought to start the day</T>
+        <T variant="label">What helped you get going?</T>
         <TextInput
           accessibilityLabel="Morning journal"
           multiline
-          placeholder="Today, I’m grateful for…"
+          placeholder="This morning, I noticed…"
           placeholderTextColor={c.faint}
           maxLength={500}
           value={note}
@@ -230,7 +233,7 @@ export function Journal() {
         </T>
       </Card>
       <Button
-        title={saved ? "Your moment is saved" : "Save this little moment"}
+        title={saved ? "Check-in saved" : "Save my check-in"}
         haptic={false}
         loading={busy}
         icon={saved ? "checkmark" : "add"}
@@ -258,9 +261,9 @@ export function Journal() {
           style={{ width: 80, height: 80, borderRadius: 20 }}
         />
         <View style={{ flex: 1 }}>
-          <T variant="heading">{data.completions.length} little beginnings</T>
+          <T variant="heading">{data.completions.length} fresh {data.completions.length === 1 ? "start" : "starts"}</T>
           <T variant="small" style={{ color: c.muted }}>
-            Mornings you’ve greeted with Refresh.
+            Wake-ups completed with Refresh.
           </T>
         </View>
       </Card>
@@ -321,7 +324,7 @@ export function Settings() {
       <View style={{ alignItems: "center", gap: 10, paddingVertical: 12 }}>
         <Icon name="sunny-outline" size={38} color={c.peach} />
         <T variant="heading">Refresh</T>
-        <T style={{ color: c.muted }}>A kinder way to wake up.</T>
+        <T style={{ color: c.muted }}>Wake up fresh. Feel more you.</T>
       </View>
       <Card>
         <Row
@@ -371,6 +374,8 @@ export function Settings() {
         <T variant="small" style={{ color: c.muted }}>
           {alarmKitAvailable()
             ? "System alarms are powered by Apple AlarmKit. They can sound through Silent mode and Focus."
+            : AndroidAlarm
+              ? "Android alarm-clock scheduling wakes your phone, rings continuously, and opens your wake-up screen when locked. Complete your missions or snooze to stop the sound."
             : Platform.OS === "web"
               ? "This browser is a visual preview. Demo alarms only run while the page stays open. Install a mobile build for scheduled device alerts."
               : "This build uses local notifications. Notification settings, Focus, and battery restrictions may silence or delay them. On iOS 26+, install a Refresh native build to use AlarmKit."}
@@ -395,7 +400,7 @@ export function Settings() {
         </T>
       </Tap>
       <T variant="small" style={{ textAlign: "center", color: c.faint }}>
-        REFRESH 1.0 · A LITTLE MORE LIGHT
+        REFRESH 1.0 · A FRESH START EVERY DAY
       </T>
     </Screen>
   );

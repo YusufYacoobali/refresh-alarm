@@ -63,8 +63,8 @@ export function Home() {
         title={`${greeting},`}
         subtitle={
           now.getHours() < 18
-            ? "A new day. A little more possibility."
-            : "Rest well. Big things tomorrow."
+            ? "Make room for a fresh start."
+            : "Set tonight. Start fresh tomorrow."
         }
         right={
           <CircleButton
@@ -86,13 +86,13 @@ export function Home() {
               style={{ flexDirection: "row", justifyContent: "space-between" }}
             >
               <T variant="small" style={{ color: c.lavender }}>
-                YOUR NEXT CHAPTER
+                YOUR NEXT FRESH START
               </T>
               <Icon name="alarm-outline" size={19} />
             </View>
-            <T variant="heading">Good mornings start here.</T>
+            <T variant="heading">Give tomorrow a better start.</T>
             <T style={{ color: c.muted }}>
-              Choose a time. We’ll bring a little light.
+              Pick your sound. Add a wake-up mission. Make the first move easier.
             </T>
             <Button
               title="Set your first alarm"
@@ -113,7 +113,7 @@ export function Home() {
           <T variant="small" style={{ color: c.muted }}>
             {data.snoozed
               ? `Snoozing · ${timeUntil(new Date(data.snoozed.at), now)} to go`
-              : `${timeUntil(nextOccurrence(alarm, now), now)} until your next little beginning`}
+              : `${timeUntil(nextOccurrence(alarm, now), now)} until your next wake-up`}
           </T>
         </View>
       )}
@@ -192,7 +192,7 @@ export function Home() {
         >
           <Icon name="play-circle-outline" size={17} color={c.faint} />
           <T variant="small" style={{ color: c.muted }}>
-            Try your morning experience
+            Try your wake-up routine
           </T>
         </View>
       </Tap>
@@ -215,11 +215,11 @@ export function Alarms() {
     <Screen style={{ paddingTop: insets.top + 28 }}>
       {saved && data.alarms.some(a => a.id === saved) && <Card style={{ padding: 16, borderColor: c.green, flexDirection: "row", gap: 10, alignItems: "center" }}><Icon name="checkmark-circle" color={c.green} /><T accessibilityLiveRegion="polite" style={{ flex: 1 }}>Alarm saved. You’re all set.</T><Tap label="Dismiss saved confirmation" onPress={() => router.setParams({ saved: undefined })}><Icon name="close" size={18} /></Tap></Card>}
       <T variant="eyebrow" style={{ color: c.peach }}>
-        A LITTLE STRUCTURE. A SOFTER START.
+        LESS SNOOZE. MORE MORNING.
       </T>
       <Heading
         title="Your mornings"
-        subtitle={`${data.alarms.filter((a) => a.enabled).length} active · All in your own time`}
+        subtitle={`${data.alarms.filter((a) => a.enabled).length} active · Ready for your next wake-up`}
         right={
           <CircleButton
             icon="add"
@@ -244,8 +244,7 @@ export function Alarms() {
             A fresh start awaits.
           </T>
           <T style={{ color: c.muted, textAlign: "center" }}>
-            Your alarms will live here. Let’s make your first morning a good
-            one.
+            Set a time, choose your sound, and give yourself a reason to get up.
           </T>
           <Button
             title="Create an alarm"
@@ -257,7 +256,7 @@ export function Alarms() {
           />
         </>
       )}
-      <Quote text="You don’t have to do it all. Just begin." />
+      <Quote text="A little less snooze. A little more time for you." />
     </Screen>
   );
 }

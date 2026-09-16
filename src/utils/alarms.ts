@@ -5,7 +5,7 @@ export type { SoundId };
 export type Challenge = "none" | "math" | "memory" | "shake";
 export type Mission = { kind: Exclude<Challenge, "none">; difficulty: "gentle" | "bright" };
 export type Registration = {
-  kind: "alarmkit" | "notifications" | "preview";
+  kind: "alarmkit" | "android" | "notifications" | "preview";
   ids: string[];
 };
 export type Alarm = {
@@ -16,6 +16,7 @@ export type Alarm = {
   label: string;
   enabled: boolean;
   sound: SoundId;
+  wallpaper?: string;
   challenge: Challenge;
   difficulty: "gentle" | "bright";
   /** Ordered missions. Undefined reads the legacy single-mission settings. */

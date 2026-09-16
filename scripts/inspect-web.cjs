@@ -17,7 +17,7 @@ const fs = require("node:fs");
     timeout: 120000,
   });
   await page
-    .getByRole("button", { name: "Get started", exact: true })
+    .getByRole("button", { name: "Refresh my mornings", exact: true })
     .waitFor({ timeout: 45000 })
     .catch(() => {});
   await page.waitForTimeout(2500);

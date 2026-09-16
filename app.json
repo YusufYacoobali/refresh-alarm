@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.daybreak.alarm",
+      "bundleIdentifier": "com.yacoobali.alarm",
       "infoPlist": {
         "NSAlarmKitUsageDescription": "Refresh uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
         "NSMotionUsageDescription": "Refresh uses motion only during your shake-to-wake challenge.",
@@ -17,7 +17,7 @@
       }
     },
     "android": {
-      "package": "com.daybreak.alarm",
+      "package": "com.yacoobali.alarm",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
         "VIBRATE",
@@ -67,7 +67,9 @@
           "enableBackgroundPlayback": true
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      ["expo-image-picker", { "photosPermission": "Choose a photo for your alarm background.", "cameraPermission": false, "microphonePermission": false }],
+      "./plugins/with-refresh-alarm.cjs"
     ]
   }
 }

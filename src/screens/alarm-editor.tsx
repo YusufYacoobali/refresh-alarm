@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
+import { Image } from "expo-image";
+import { pickWallpaper } from "@/services/wallpaper";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { Screen, T, Button, Card, Row, Tap, Chip, Icon } from "@/components/ui";
@@ -58,6 +60,7 @@ export function AlarmEditor() {
     useApp();
   const insets = useSafeAreaInsets();
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [choosingPhoto, setChoosingPhoto] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
@@ -65,6 +68,16 @@ export function AlarmEditor() {
   }, []);
   if (!draft) return null;
   const exists = data.alarms.some((a) => a.id === draft.id);
+  async function chooseWallpaper() {
+    if (choosingPhoto) return;
+    setChoosingPhoto(true);
+    try {
+      const wallpaper = await pickWallpaper();
+      if (wallpaper) updateDraft({ wallpaper });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Couldn’t open your photos.");
+    } finally { setChoosingPhoto(false); }
+  }
   async function save() {
     setSaveError(null);
     clearError();
@@ -197,6 +210,11 @@ export function AlarmEditor() {
             router.push({ pathname: "/challenges", params: { editing: "1" } })
           }
         />
+        <Row icon="image-outline" title="Alarm background" value={choosingPhoto ? "Opening photos…" : draft.wallpaper ? "Your photo" : "Choose a photo"} onPress={() => void chooseWallpaper()} />
+        {draft.wallpaper && <View style={{ padding: 16, gap: 12 }}>
+          <Image source={{ uri: draft.wallpaper }} contentFit="cover" style={{ height: 150, borderRadius: 16 }} accessibilityLabel="Selected alarm background" />
+          <Tap label="Remove custom background" onPress={() => updateDraft({ wallpaper: undefined })}><T variant="small" style={{ color: c.lavender, textAlign: "center" }}>Use default artwork</T></Tap>
+        </View>}
         <Row icon="time-outline" title="Snooze" value={draft.snooze === 0 ? "Off" : `${draft.snooze} minutes`} last />
         <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 18 }}>
           {[0, 5, 10, 15].map(minutes => <Chip key={minutes} title={minutes === 0 ? "Off" : `${minutes} min`} active={draft.snooze === minutes} onPress={() => updateDraft({ snooze: minutes })} />)}
