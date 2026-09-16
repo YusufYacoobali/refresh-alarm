@@ -95,6 +95,14 @@ test("mission validation rejects duplicates, invalid difficulty, and unknown kin
   assert.equal(missionDescription("memory", "gentle"), "4 pairs · 2-second preview");
 });
 
+test("alarm volume, gradual volume and reminder validate without breaking older alarms", () => {
+  assert.doesNotThrow(() => validateAlarm(alarm));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, volume: .8, volumeRampSeconds: 60, missionReminder: true }));
+  for (const volume of [0, -1, 1.1, NaN, Infinity]) assert.throws(() => validateAlarm({ ...alarm, volume }));
+  for (const volumeRampSeconds of [-1, 15, NaN]) assert.throws(() => validateAlarm({ ...alarm, volumeRampSeconds }));
+  assert.throws(() => validateAlarm({ ...alarm, missionReminder: "false" } as unknown as Alarm));
+});
+
 test("silent missions is optional for existing alarms and validates saved preferences", () => {
   assert.doesNotThrow(() => validateAlarm(alarm));
   assert.doesNotThrow(() => validateAlarm({ ...alarm, silentMissions: true }));

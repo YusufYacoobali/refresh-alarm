@@ -9,5 +9,6 @@ type AndroidAlarmBridge = {
   activeAlarm(): { alarmId: string; eventId: string } | null;
   stop(alarmId: string): Promise<void>;
   setMissionSilenced(eventId: string, silent: boolean): Promise<void>;
+  missionActivity(eventId: string): Promise<void>;
 };
 export default Platform.OS === "android" ? requireOptionalNativeModule<AndroidAlarmBridge>("RefreshAlarm") : null;

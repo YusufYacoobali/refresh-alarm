@@ -23,6 +23,10 @@ export type Alarm = {
   missions?: Mission[];
   /** Older alarms keep ringing during missions unless explicitly silenced. */
   silentMissions?: boolean;
+  /** Undefined preserves the device volume for alarms saved before volume controls. */
+  volume?: number;
+  volumeRampSeconds?: number;
+  missionReminder?: boolean;
   snooze: number;
   registration?: Registration;
   nextAt?: number;
@@ -114,6 +118,12 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose a valid sound preference.");
   if (a.silentMissions !== undefined && typeof a.silentMissions !== "boolean")
     throw new Error("Choose a valid mission sound preference.");
+  if (a.volume !== undefined && (!Number.isFinite(a.volume) || a.volume < 0.1 || a.volume > 1))
+    throw new Error("Choose an alarm volume between 10% and 100%.");
+  if (a.volumeRampSeconds !== undefined && ![0, 30, 60, 120].includes(a.volumeRampSeconds))
+    throw new Error("Choose a valid gradual volume duration.");
+  if (a.missionReminder !== undefined && typeof a.missionReminder !== "boolean")
+    throw new Error("Choose a valid mission reminder preference.");
 }
 export function mathQuestion(level: Alarm["difficulty"], random = Math.random) {
   const a = Math.floor(random() * (level === "bright" ? 15 : 8)) + 2;

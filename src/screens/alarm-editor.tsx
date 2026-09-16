@@ -5,6 +5,7 @@ import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-n
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
 import { AlarmSwitch } from "@/components/alarm-switch";
+import { Host, Slider } from "@expo/ui";
 import { Image } from "expo-image";
 import { pickWallpaper } from "@/services/wallpaper";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,7 +26,7 @@ import {
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
   const { reduced } = useMotion();
   const { width } = useWindowDimensions();
-  const size = Math.min(288, width - 48), center = size / 2, radius = center - 23;
+  const size = Math.min(264, width - 48), center = size / 2, radius = center - 23;
   return <View testID="time-dial" style={{ width: size, height: size, alignSelf: "center", alignItems: "center", justifyContent: "center" }}>
     <View pointerEvents="none" style={{ position: "absolute", width: size - 28, height: size - 28, borderRadius: center - 14, borderWidth: 17, borderColor: "#26263F", boxShadow: "inset 3px 3px 9px #8E81BC55, 0 0 30px #BDB0F510" }} />
     {Array.from({ length: 30 }, (_, i) => {
@@ -64,6 +65,8 @@ export function AlarmEditor() {
   const [choosingPhoto, setChoosingPhoto] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false);
+  const [section, setSection] = useState<"sound" | "missions" | "more" | null>(null);
+  const toggleSection = (next: "sound" | "missions" | "more") => setSection(current => current === next ? null : next);
   useEffect(() => {
     if (!draft) edit();
   }, []);
@@ -92,7 +95,7 @@ export function AlarmEditor() {
   }
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-    <Screen style={{ gap: 16 }}>
+    <Screen style={{ gap: 12 }}>
       <View style={{ gap: 4 }}>
         <TimeDial
           hour={draft.hour}
@@ -195,26 +198,60 @@ export function AlarmEditor() {
             }}
           />
         </Row>
+      </Card>
+      <Card>
         <Row
           icon="musical-notes-outline"
-          title="Sound"
-          value={soundName(draft.sound)}
-          onPress={() =>
-            router.push({ pathname: "/sounds", params: { editing: "1" } })
-          }
+          title="Sound & volume"
+          value={`${soundName(draft.sound)} · ${draft.volume === undefined ? "Device" : `${Math.round(draft.volume * 100)}%`}`}
+          onPress={() => toggleSection("sound")}
+          last={section !== "sound"}
         />
+        {section === "sound" && <>
+          <Row icon="musical-note-outline" title="Choose sound" value={soundName(draft.sound)} onPress={() => router.push({ pathname: "/sounds", params: { editing: "1" } })} />
+          <View style={{ padding: 18, gap: 14 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <T>Alarm volume</T><T style={{ color: c.lavender }}>{draft.volume === undefined ? "Device volume" : `${Math.round(draft.volume * 100)}%`}</T>
+            </View>
+            <Host style={{ height: 48, width: "100%" }} colorScheme="dark" seedColor={c.lavender}
+              accessibilityLabel="Alarm volume" accessibilityRole="adjustable"
+              accessibilityValue={{ min: 10, max: 100, now: Math.round((draft.volume ?? .8) * 100) }}
+              accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+              onAccessibilityAction={event => updateDraft({ volume: Math.max(.1, Math.min(1, (draft.volume ?? .8) + (event.nativeEvent.actionName === "increment" ? .1 : -.1))) })}>
+              <Slider testID="alarm-volume" min={10} max={100} step={5} value={Math.round((draft.volume ?? .8) * 100)} onValueChange={value => updateDraft({ volume: value / 100 })} />
+            </Host>
+            <T variant="small" style={{ color: c.muted }}>Volume for this alarm. Your phone’s previous level is restored after it stops.</T>
+            <T>Gradually increase volume</T>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {[0, 30, 60, 120].map(seconds => <Chip key={seconds} title={seconds === 0 ? "Off" : seconds === 30 ? "30 sec" : `${seconds / 60} min`} active={(draft.volumeRampSeconds ?? 0) === seconds} onPress={() => updateDraft({ volumeRampSeconds: seconds })} />)}
+            </View>
+            <T variant="small" style={{ color: c.muted }}>Starts quietly and builds to your chosen volume.</T>
+          </View>
+        </>}
+      </Card>
+      <Card>
         <Row
           icon="extension-puzzle-outline"
           title="Wake-up missions"
           value={missionSummary(draft)}
-          onPress={() =>
-            router.push({ pathname: "/challenges", params: { editing: "1" } })
-          }
+          onPress={() => toggleSection("missions")}
+          last={section !== "missions"}
         />
+        {section === "missions" && <>
+        <Row icon="extension-puzzle-outline" title="Choose missions" value={draft.missions?.length ? `${draft.missions.length} selected` : "Choose your routine"} onPress={() => router.push({ pathname: "/challenges", params: { editing: "1" } })} />
         <Row icon="volume-mute-outline" title="Silent during missions">
           <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? false} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>
-        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 14, color: c.muted }}>Your alarm rings to wake you. Sound pauses while you solve missions.</T>
+        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 14, color: c.muted }}>Pause sound while you solve. Locking your phone brings the sound back.</T>
+        <Row icon="refresh-outline" title="Ring again if I drift off" last>
+          <AlarmSwitch label="Ring again if I drift off" testID="mission-reminder" disabled={busy} value={draft.missionReminder !== false} onValueChange={missionReminder => updateDraft({ missionReminder })} />
+        </Row>
+        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>After 1 minute without a mission answer, card flip, or shake, the alarm rings again and your missions restart.</T>
+        </>}
+      </Card>
+      <Card>
+        <Row icon="options-outline" title="More options" value={`${draft.snooze ? `${draft.snooze} min snooze` : "Snooze off"}${draft.wallpaper ? " · Photo" : ""}`} onPress={() => toggleSection("more")} last={section !== "more"} />
+        {section === "more" && <>
         <Row icon="image-outline" title="Alarm background" value={choosingPhoto ? "Opening photos…" : draft.wallpaper ? "Your photo" : "Choose a photo"} onPress={() => void chooseWallpaper()} />
         {draft.wallpaper && <View style={{ padding: 16, gap: 12 }}>
           <Image source={{ uri: draft.wallpaper }} contentFit="cover" style={{ height: 150, borderRadius: 16 }} accessibilityLabel="Selected alarm background" />
@@ -224,6 +261,7 @@ export function AlarmEditor() {
         <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 18 }}>
           {[0, 5, 10, 15].map(minutes => <Chip key={minutes} title={minutes === 0 ? "Off" : `${minutes} min`} active={draft.snooze === minutes} onPress={() => updateDraft({ snooze: minutes })} />)}
         </View>
+        </>}
       </Card>
       <View
         style={{

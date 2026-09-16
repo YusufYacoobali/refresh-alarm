@@ -8,7 +8,7 @@ import { useSoundPlayer } from "./use-sound-player";
 import { Button } from "./ui";
 import AndroidAlarm from "@/services/android-alarm";
 
-export function AlarmSound({ alarm, preview, silent = false }: { alarm: Alarm; preview: boolean; silent?: boolean }) {
+export function AlarmSound({ alarm, preview, silent = false, immediate = false }: { alarm: Alarm; preview: boolean; silent?: boolean; immediate?: boolean }) {
   const { play, stop, error } = useSoundPlayer();
   const [handoffError, setHandoffError] = useState(false);
   const latest = useRef(alarm); latest.current = alarm;
@@ -32,16 +32,16 @@ export function AlarmSound({ alarm, preview, silent = false }: { alarm: Alarm; p
       try {
         // Transfer the audible alarm to the foreground app, avoiding two players.
         if (!preview) await stopAlarm(latest.current);
-        if (!cancelled && !silent) await play(latest.current.sound, true);
+        if (!cancelled && !silent) await play(latest.current.sound, true, { volume: latest.current.volume, rampSeconds: immediate ? 0 : latest.current.volumeRampSeconds });
       } catch { if (!cancelled) setHandoffError(true); }
     };
     if (!preview) void start();
     return () => { cancelled = true; stop(); };
-  }, [alarm.id, alarm.sound, preview, silent, play, stop]));
+  }, [alarm.id, alarm.sound, preview, silent, immediate, play, stop]));
   if (AndroidAlarm && !preview) return handoffError ? <Button title="Retry mission sound" secondary onPress={() => {
     const active = AndroidAlarm!.activeAlarm();
     if (active?.alarmId === alarm.id) void AndroidAlarm!.setMissionSilenced(active.eventId, silent)
       .then(() => setHandoffError(false)).catch(() => {});
   }} /> : null;
-  return !silent && (error || handoffError) ? <Button title="Play alarm sound" secondary onPress={() => { setHandoffError(false); void play(alarm.sound, true); }} /> : null;
+  return !silent && (error || handoffError) ? <Button title="Play alarm sound" secondary onPress={() => { setHandoffError(false); void play(alarm.sound, true, { volume: alarm.volume, rampSeconds: immediate ? 0 : alarm.volumeRampSeconds }); }} /> : null;
 }

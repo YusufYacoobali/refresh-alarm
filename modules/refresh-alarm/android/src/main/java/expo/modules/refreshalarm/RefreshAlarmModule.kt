@@ -42,6 +42,9 @@ class RefreshAlarmModule : Module() {
     AsyncFunction("setMissionSilenced") { eventId: String, silent: Boolean ->
       AlarmRingService.silenceMission(eventId, silent)
     }.runOnQueue(Queues.MAIN)
+    AsyncFunction("missionActivity") { eventId: String ->
+      AlarmRingService.missionActivity(eventId)
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("stop") { alarmId: String ->
       if (AlarmStore.active(context)?.optString("alarmId") == alarmId) {
         AlarmStore.clearActive(context)

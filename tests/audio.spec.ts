@@ -5,7 +5,8 @@ test("all supplied sounds decode, preview exclusively, and stop on leaving", asy
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/alarm");
-  await page.getByRole("button", { name: /Sound Lo-fi/ }).click();
+  await page.getByRole("button", { name: /Sound & volume/ }).click();
+  await page.getByRole("button", { name: /Choose sound/ }).click();
   for (const sound of sounds) {
     if (sound.category === "Islamic") await page.getByRole("button", { name: "Islamic", exact: true }).click();
     await page.getByRole("button", { name: `Play ${sound.name}`, exact: true }).click();
@@ -30,7 +31,8 @@ test("all supplied sounds decode, preview exclusively, and stop on leaving", asy
 
 test("Islamic section saves adhan selections and reopens on the selected section", async ({ page }) => {
   await page.goto("/alarm");
-  await page.getByRole("button", { name: /Sound Lo-fi/ }).click();
+  await page.getByRole("button", { name: /Sound & volume/ }).click();
+  await page.getByRole("button", { name: /Choose sound/ }).click();
   await page.getByRole("button", { name: "Islamic", exact: true }).click();
   await expect(page.getByRole("button", { name: "Select Lo-fi", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Select Adhan", exact: true })).toBeVisible();
@@ -42,7 +44,8 @@ test("Islamic section saves adhan selections and reopens on the selected section
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0].sound)).toBe("adhan_alafasy_fajr");
   await page.reload();
   await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
-  await page.getByRole("button", { name: /Sound Mishary Alafasy/ }).click();
+  await page.getByRole("button", { name: /Sound & volume/ }).click();
+  await page.getByRole("button", { name: /Choose sound/ }).click();
   await expect(page.getByRole("button", { name: "Islamic", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Select Mishary Alafasy · Fajr", exact: true })).toHaveAttribute("aria-pressed", "true");
 });

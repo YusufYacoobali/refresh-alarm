@@ -123,7 +123,8 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page
     .getByRole("textbox", { name: "Alarm label", exact: true })
     .fill("A lovely morning");
-  await page.getByRole("button", { name: /Sound Lo-fi/ }).click();
+  await page.getByRole("button", { name: /Sound & volume/ }).click();
+  await page.getByRole("button", { name: /Choose sound/ }).click();
   await expect(
     page.getByText("Alarm sounds", { exact: true }).last(),
   ).toBeVisible();
@@ -135,6 +136,7 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
     .getByRole("button", { name: "Use this sound", exact: true })
     .click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
   await page.getByRole("button", { name: "Memory match", exact: true }).click();
   await page.screenshot({ path: "artifacts/screenshots/05-challenges.png" });
   await page

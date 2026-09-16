@@ -38,12 +38,14 @@ test("silent missions mute across mission changes, can be unmuted, and finish cl
 
 test("mission sound preference survives saving and reopening the editor", async ({ page }) => {
   await page.goto("/alarm");
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
   const toggle = page.getByRole("switch", { name: "Silent during missions", exact: true });
   await toggle.click();
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await expect(toggle).toBeChecked();
 });
 

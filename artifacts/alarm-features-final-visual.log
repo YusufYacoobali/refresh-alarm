@@ -1,0 +1,9 @@
+
+Running 2 tests using 1 worker
+
+(node:17500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\alarm-features.spec.ts:16:5 › simple editor saves individual volume, fade and mission preferences (3.5s)
+  ok 2 tests\alarm-features.spec.ts:42:5 › alarm audio rises to its chosen volume and an idle mission rings again (4.4s)
+
+  2 passed (10.8s)

@@ -87,7 +87,7 @@ export async function scheduleAlarm(
     const id = reuse?.kind === "android" ? reuse.ids[0] : Crypto.randomUUID();
     const sound = resolveSoundId(alarm.sound);
     const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.mp3` : soundFile(alarm.sound);
-    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
+    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: alarm.missionReminder !== false, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
     return { kind: "android", ids: [id] };
   }
   if (alarmKitAvailable()) {

@@ -61,5 +61,6 @@ export const art = {
   home: require("../assets/art/home.png"),
   moon: require("../assets/art/moon.png"),
   valley: require("../assets/art/valley.png"),
+  alarmValley: require("../assets/art/valley-no-sun.png"),
   sounds: require("../assets/art/sounds.png"),
 };

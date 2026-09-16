@@ -1,0 +1,26 @@
+
+Running 19 tests using 1 worker
+
+(node:16676) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\alarm-features.spec.ts:16:5 › simple editor saves individual volume, fade and mission preferences (4.2s)
+  ok  2 tests\alarm-features.spec.ts:41:5 › alarm audio rises to its chosen volume and an idle mission rings again (3.8s)
+  ok  3 tests\alarm-features.spec.ts:67:5 › actual mission interaction renews the minute, and finishing cancels it (2.8s)
+  ok  4 tests\alarm-features.spec.ts:85:5 › mission reminder can be switched off for an alarm (2.2s)
+  ok  5 tests\alarm-lifecycle.spec.ts:14:5 › silent missions mute across mission changes, can be unmuted, and finish cleanly (3.8s)
+  ok  6 tests\alarm-lifecycle.spec.ts:39:5 › mission sound preference survives saving and reopening the editor (4.9s)
+  ok  7 tests\alarm-lifecycle.spec.ts:52:5 › a failed dismissal remains retryable without replaying missions (3.2s)
+  ok  8 tests\app.spec.ts:3:5 › a scheduled one-off rings, snoozes, and is disabled on completion (3.4s)
+  ok  9 tests\app.spec.ts:74:5 › failed storage preserves the alarm draft and allows retry (2.4s)
+  ok 10 tests\app.spec.ts:105:5 › onboarding, alarm editing, persistence, challenges, journal, and deletion (15.8s)
+  ok 11 tests\app.spec.ts:212:5 › memory challenge rewards four real matching pairs (6.2s)
+  ok 12 tests\app.spec.ts:238:5 › shake preview counts motion demonstrations and offers accessible math (4.4s)
+  ok 13 tests\audio.spec.ts:4:5 › all supplied sounds decode, preview exclusively, and stop on leaving (13.5s)
+  ok 14 tests\audio.spec.ts:32:5 › Islamic section saves adhan selections and reopens on the selected section (5.4s)
+  ok 15 tests\audio.spec.ts:53:5 › a real alarm loops its chosen sound through missions and stops on completion (7.0s)
+  ok 16 tests\audio.spec.ts:75:5 › shake count stays large and visible on a small screen (3.1s)
+  ok 17 tests\editor.spec.ts:3:5 › wheel editing saves multiple missions with individual difficulties and snooze off (12.0s)
+  ok 18 tests\editor.spec.ts:49:5 › wheel endpoints center at full opacity, adjacent numbers tap, and scrolling glides (7.6s)
+  ok 19 tests\editor.spec.ts:101:5 › the full mission sequence finishes only after the last mission (10.1s)
+
+  19 passed (2.3m)

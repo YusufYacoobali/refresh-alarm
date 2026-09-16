@@ -26,6 +26,9 @@ class AlarmRingService : Service() {
       // Reject late JS mute requests after the screen has locked/backgrounded.
       running?.takeIf { it.eventId == eventId }?.silence(silent && appVisible)
     }
+    fun missionActivity(eventId: String) {
+      running?.takeIf { it.eventId == eventId && appVisible }?.touchMission()
+    }
     fun ensureChannel(context: android.content.Context) {
       if (Build.VERSION.SDK_INT >= 26) context.getSystemService(NotificationManager::class.java).createNotificationChannel(
         NotificationChannel(CHANNEL_ID, "Ringing alarms", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -39,6 +42,21 @@ class AlarmRingService : Service() {
   private val resume = Runnable { silence(false) }
   private var eventId: String? = null
   private var silent = false
+  private var ringStarted = 0L
+  private var rampSeconds = 0
+  private var missionDeadline = 0L
+  private var previousVolume: Int? = null
+  private var appliedVolume: Int? = null
+  private val pulse = object : Runnable {
+    override fun run() {
+      if (AlarmPlaybackPolicy.expired(missionDeadline, SystemClock.elapsedRealtime())) {
+        remind()
+        return // onStartCommand schedules the next pulse.
+      }
+      applyGain()
+      handler.postDelayed(this, 250)
+    }
+  }
   private var player: MediaPlayer? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var focus: AudioFocusRequest? = null
@@ -55,6 +73,25 @@ class AlarmRingService : Service() {
     running = this
     silent = false
     handler.removeCallbacks(resume)
+    handler.removeCallbacks(pulse)
+    ringStarted = SystemClock.elapsedRealtime()
+    rampSeconds = if (alarm.optBoolean("reminder", false)) 0 else alarm.optInt("volumeRampSeconds", 0)
+    missionDeadline = alarm.optLong("missionDeadline", 0L)
+    // Persist the original level before changing it, including across service restarts.
+    if (previousVolume == null && alarm.has("previousVolume")) {
+      previousVolume = alarm.getInt("previousVolume")
+      appliedVolume = alarm.getInt("appliedVolume")
+    }
+    if (alarm.has("volume")) {
+      val target = AlarmPlaybackPolicy.streamLevel(alarm.getDouble("volume"), audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM))
+      if (previousVolume == null) previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+      appliedVolume = target
+      alarm.put("previousVolume", previousVolume).put("appliedVolume", target)
+      AlarmStore.setActive(this, alarm)
+      // Fixed-volume devices or policy restrictions must not prevent playback.
+      runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, target, 0) }
+    }
+    handler.post(pulse)
     ensureChannel(this)
     AlarmWindow.refresh()
     val open = AlarmStore.launch(this, alarm.getString("id"))
@@ -92,12 +129,37 @@ class AlarmRingService : Service() {
     handler.removeCallbacks(resume)
     if (silent != value) {
       silent = value
-      player?.setVolume(if (value) 0f else 1f, if (value) 0f else 1f)
+      applyGain()
       if (value) vibrator?.cancel() else vibrate()
     }
     // Renewed while the mission is visible; a stalled JS runtime must not leave
     // an unfinished alarm permanently muted. Activity pause also restores it.
     if (value) handler.postDelayed(resume, 30_000)
+  }
+  private fun applyGain() {
+    val gain = if (silent) 0f else AlarmPlaybackPolicy.gain(SystemClock.elapsedRealtime() - ringStarted, rampSeconds)
+    runCatching { player?.setVolume(gain, gain) }
+  }
+  private fun touchMission() {
+    val active = AlarmStore.active(this) ?: return
+    if (active.optString("eventId") != eventId || !active.optBoolean("missionReminder", true)) return
+    // An interaction delivered after the deadline cannot cancel an overdue reminder.
+    if (AlarmPlaybackPolicy.expired(missionDeadline, SystemClock.elapsedRealtime())) { remind(); return }
+    missionDeadline = SystemClock.elapsedRealtime() + AlarmPlaybackPolicy.MISSION_IDLE_MS
+    active.put("missionDeadline", missionDeadline)
+    // Frequent card flips and shakes should not block rendering on disk I/O.
+    AlarmStore.setActive(this, active, synchronous = false)
+  }
+  private fun remind() {
+    val active = AlarmStore.active(this) ?: return
+    if (active.optString("eventId") != eventId) return
+    active.remove("missionDeadline")
+    active.put("reminder", true).put("eventId", "${active.getString("id")}:reminder:${SystemClock.elapsedRealtime()}")
+    AlarmStore.setActive(this, active)
+    // Repost the alarm notification to wake a locked screen; the new occurrence
+    // also sends the visible app back to the ringing screen and resets missions.
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    onStartCommand(null, 0, 0)
   }
   override fun onTaskRemoved(rootIntent: Intent?) { silence(false); super.onTaskRemoved(rootIntent) }
   private fun play(source: Uri, fallback: Uri, retry: Boolean) {
@@ -108,7 +170,7 @@ class AlarmRingService : Service() {
     next.isLooping = true
     next.setOnPreparedListener {
       if (player === it) {
-        it.setVolume(if (silent) 0f else 1f, if (silent) 0f else 1f)
+        applyGain()
         it.start()
       }
     }
@@ -121,6 +183,10 @@ class AlarmRingService : Service() {
     if (running === this) running = null
     player?.release(); player = null
     vibrator?.cancel()
+    previousVolume?.let { original ->
+      if (audioManager.getStreamVolume(AudioManager.STREAM_ALARM) == appliedVolume)
+        runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, original, 0) }
+    }
     if (wakeLock?.isHeld == true) wakeLock?.release()
     if (Build.VERSION.SDK_INT >= 26) focus?.let { audioManager.abandonAudioFocusRequest(it) }
     else audioManager.abandonAudioFocus(null)

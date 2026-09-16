@@ -15,8 +15,10 @@ test("wheel editing saves multiple missions with individual difficulties and sno
   await page.mouse.wheel(0, 80);
   await expect(page.getByLabel("Alarm minute", { exact: true })).toHaveAttribute("aria-valuenow", "2");
   await page.getByLabel("Alarm label", { exact: true }).fill("My mission morning");
+  await page.getByRole("button", { name: /More options/ }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
   await page.getByRole("button", { name: "Math puzzle", exact: true }).click();
   await page.getByRole("button", { name: "Math puzzle Hard", exact: true }).click();
   await page.getByRole("button", { name: "Memory match", exact: true }).click();
@@ -34,8 +36,10 @@ test("wheel editing saves multiple missions with individual difficulties and sno
   expect(alarm.missions).toEqual([{ kind: "math", difficulty: "bright" }, { kind: "memory", difficulty: "gentle" }, { kind: "shake", difficulty: "bright" }]);
   await page.reload();
   await page.getByRole("button", { name: "Edit My mission morning at 8:02", exact: true }).click();
+  await page.getByRole("button", { name: /More options/ }).click();
   await expect(page.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByRole("button", { name: "Math puzzle Hard", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Memory match Easy", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.goto(`/ringing?id=${alarm.id}`);

@@ -2,6 +2,7 @@ import { goHome } from "@/utils/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, BackHandler, AppState, useWindowDimensions } from "react-native";
 import { AlarmSound } from "@/components/alarm-sound";
+import { useMissionReminder } from "@/components/use-mission-reminder";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
@@ -50,6 +51,7 @@ function useWakeAlarm() {
   const params = useLocalSearchParams<{
     id?: string;
     eventId?: string;
+    reminder?: string;
     preview?: string;
     kind?: Challenge;
     difficulty?: "gentle" | "bright";
@@ -82,7 +84,7 @@ function MissingAlarm() {
   );
 }
 export function Ringing() {
-  const { alarm, isPreview, eventId } = useWakeAlarm();
+  const { alarm, isPreview, eventId, reminder } = useWakeAlarm();
   const { finish, snooze, busy } = useApp();
   const insets = useSafeAreaInsets();
   const acting = useRef(false);
@@ -126,7 +128,7 @@ export function Ringing() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Float style={{ position: "absolute", inset: -10 }} distance={5}><Image
-        source={alarm.wallpaper ? { uri: alarm.wallpaper } : art.valley}
+        source={alarm.wallpaper ? { uri: alarm.wallpaper } : art.alarmValley}
         contentFit="cover"
         contentPosition="bottom"
         style={{ position: "absolute", inset: 0 }}
@@ -185,10 +187,9 @@ export function Ringing() {
           <T variant="heading">{alarm.hour < 12 ? "AM" : "PM"}</T>
         </View>
         <View style={{ flex: 1, minHeight: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-          {!alarm.wallpaper && <ClayMotion name="sun" size={145} />}
         </View>
         <View style={{ width: "100%", gap: 16 }}>
-          <AlarmSound alarm={alarm} preview={isPreview} />
+        <AlarmSound alarm={alarm} preview={isPreview} immediate={reminder === "1"} />
           <Button
             title={
               alarmMissions(alarm).length === 0 ? "Hello, new day" : "Wake up my mind"
@@ -256,9 +257,11 @@ function Progress({ value, total, label = true }: { value: number; total: number
 function MathGame({
   difficulty,
   onDone,
+  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
+  onActivity(): void;
 }) {
   const [question, setQuestion] = useState(() => mathQuestion(difficulty)),
     [count, setCount] = useState(0),
@@ -280,6 +283,7 @@ function MathGame({
   useEffect(() => { answered.current = false; }, [question]);
   function answer(n: number) {
     if (done || answered.current) return;
+    onActivity();
     if (n !== question.answer) {
       setFeedback(f => ({ revision: f.revision + 1, kind: "error" }));
       setWrong(n);
@@ -367,9 +371,11 @@ function MemoryTile({ tile, revealed, matched }: { tile: number; revealed: boole
 function MemoryGame({
   difficulty,
   onDone,
+  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
+  onActivity(): void;
 }) {
   const [deck] = useState(() => memoryDeck()),
     [open, setOpen] = useState<number[]>([]),
@@ -390,6 +396,7 @@ function MemoryGame({
   function flip(i: number) {
     if (peek || locked.current || matched.includes(i) || open.includes(i))
       return;
+    onActivity();
     const next = [...open, i];
     setOpen(next);
     if (next.length !== 2) {
@@ -454,11 +461,13 @@ function ShakeGame({
   onDone,
   onFallback,
   isPreview,
+  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
   onFallback(): void;
   isPreview: boolean;
+  onActivity(): void;
 }) {
   const [count, setCount] = useState(0),
     [status, setStatus] = useState("ready");
@@ -473,6 +482,7 @@ function ShakeGame({
   doneRef.current = onDone;
   function register() {
     if (counter.current >= target) return;
+    onActivity();
     counter.current++;
     setCount(counter.current);
     if (counter.current === target) doneRef.current();
@@ -559,7 +569,8 @@ function ShakeGame({
 }
 export function ChallengeScreen() {
   const { height } = useWindowDimensions();
-  const { alarm, isPreview, kind, difficulty } = useWakeAlarm();
+  const { alarm, isPreview, kind, difficulty, eventId } = useWakeAlarm();
+  const { activity, error: reminderError } = useMissionReminder(alarm, isPreview, eventId);
   const { finish, busy } = useApp();
   const inset = useSafeAreaInsets();
   const [fallback, setFallback] = useState(false),
@@ -603,7 +614,7 @@ export function ChallengeScreen() {
   }
   return (
     <Screen style={{ paddingTop: inset.top + (height < 700 ? 16 : 26), gap: height < 700 ? 16 : 24 }}>
-      <AlarmSound alarm={alarm} preview={isPreview} silent={silent} />
+      <AlarmSound alarm={alarm} preview={isPreview} silent={silent} immediate />
       <View
         style={{
           flexDirection: "row",
@@ -639,6 +650,9 @@ export function ChallengeScreen() {
           <T variant="small" style={{ color: c.lavender }}>{silent ? "Sound off during missions" : "Sound on · tap to silence"}</T>
         </View>
       </Tap>
+      {!isPreview && alarm.missionReminder !== false && <T variant="small" style={{ color: reminderError ? c.peach : c.muted, textAlign: "center" }}>
+        {reminderError ? "Couldn’t start the reminder. Keep the alarm sound on." : "No activity for 1 minute? Your alarm will ring again."}
+      </T>}
       {completed || !mission ? (
         <>
           <T variant="heading">You did it.</T>
@@ -654,6 +668,7 @@ export function ChallengeScreen() {
           key={`memory-${missionIndex}`}
           difficulty={level}
           onDone={nextMission}
+          onActivity={activity}
         />
       ) : challenge === "shake" ? (
         <ShakeGame
@@ -662,12 +677,14 @@ export function ChallengeScreen() {
           isPreview={isPreview}
           onFallback={() => setFallback(true)}
           onDone={nextMission}
+          onActivity={activity}
         />
       ) : (
         <MathGame
           key={`math-${missionIndex}-${fallback}`}
           difficulty={level}
           onDone={nextMission}
+          onActivity={activity}
         />
       )}
       {!isPreview && (

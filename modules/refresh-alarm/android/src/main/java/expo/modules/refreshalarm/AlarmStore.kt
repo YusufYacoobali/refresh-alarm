@@ -15,7 +15,10 @@ object AlarmStore {
   fun get(c: Context, id: String): JSONObject? = prefs(c).getString("alarm:$id", null)?.let { JSONObject(it) }
   fun active(c: Context): JSONObject? = prefs(c).getString("active", null)?.let { JSONObject(it) }
   fun clearActive(c: Context) { prefs(c).edit().remove("active").commit() }
-  fun setActive(c: Context, alarm: JSONObject) { prefs(c).edit().putString("active", alarm.toString()).commit() }
+  fun setActive(c: Context, alarm: JSONObject, synchronous: Boolean = true) {
+    val edit = prefs(c).edit().putString("active", alarm.toString())
+    if (synchronous) edit.commit() else edit.apply()
+  }
   fun launch(c: Context, id: String): PendingIntent {
     val intent = requireNotNull(c.packageManager.getLaunchIntentForPackage(c.packageName))
       .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
