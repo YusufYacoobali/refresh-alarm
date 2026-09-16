@@ -72,6 +72,10 @@ export async function scheduleAlarm(
   if (Platform.OS === "android") {
     if (!AndroidAlarm) throw new Error("Install the updated Refresh Android build to enable lock-screen alarms.");
     const access = AndroidAlarm.permissions();
+    if (access.channel === false) {
+      await AndroidAlarm.openSettings("channel");
+      throw new Error("Enable Ringing alarms notifications and pop on screen in Settings, then return and save your alarm.");
+    }
     if (!access.exact) {
       await AndroidAlarm.openSettings("exact");
       throw new Error("Enable the Alarms & reminders permission, then return and save your alarm.");

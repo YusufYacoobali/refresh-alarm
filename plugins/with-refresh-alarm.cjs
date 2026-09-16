@@ -4,11 +4,31 @@ const path = require('node:path');
 
 module.exports = function withRefreshAlarm(config) {
   config = withMainActivity(config, config => {
-    let source = config.modResults.contents;
-    if (!source.includes('// Refresh alarm window')) {
+    let source = config.modResults.contents.replace(/\r\n/g, '\n');
+    // Upgrade the old hook as well as fresh prebuilds.
+    source = source.replace('super.onCreate(null)\n    // Refresh alarm window\n    expo.modules.refreshalarm.AlarmWindow.update(this)', 'super.onCreate(null)');
+    if (!source.includes('// Refresh alarm window v2')) {
       if (!source.includes('super.onCreate(null)')) throw new Error('Refresh needs a Kotlin MainActivity with onCreate.');
-      source = source.replace('super.onCreate(null)', 'super.onCreate(null)\n    // Refresh alarm window\n    expo.modules.refreshalarm.AlarmWindow.update(this)');
-      source = source.replace('class MainActivity : ReactActivity() {', 'class MainActivity : ReactActivity() {\n  override fun onResume() {\n    super.onResume()\n    expo.modules.refreshalarm.AlarmWindow.update(this)\n  }\n');
+      source = source.replace('super.onCreate(null)', '// Refresh alarm window v2\n    expo.modules.refreshalarm.AlarmWindow.update(this)\n    super.onCreate(null)');
+      source = source.replace(/  override fun onResume\(\) \{\s*super.onResume\(\)\s*expo.modules.refreshalarm.AlarmWindow.update\(this\)\s*\}\s*/, '');
+      source = source.replace('class MainActivity : ReactActivity() {', `class MainActivity : ReactActivity() {
+  override fun onNewIntent(intent: android.content.Intent) {
+    expo.modules.refreshalarm.AlarmWindow.update(this)
+    super.onNewIntent(intent)
+    setIntent(intent)
+  }
+
+  override fun onResume() {
+    expo.modules.refreshalarm.AlarmWindow.update(this)
+    expo.modules.refreshalarm.AlarmRingService.setAppVisible(true)
+    super.onResume()
+  }
+
+  override fun onPause() {
+    expo.modules.refreshalarm.AlarmRingService.setAppVisible(false)
+    super.onPause()
+  }
+`);
       config.modResults.contents = source;
     }
     return config;

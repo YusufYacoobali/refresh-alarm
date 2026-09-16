@@ -21,6 +21,8 @@ export type Alarm = {
   difficulty: "gentle" | "bright";
   /** Ordered missions. Undefined reads the legacy single-mission settings. */
   missions?: Mission[];
+  /** Older alarms keep ringing during missions unless explicitly silenced. */
+  silentMissions?: boolean;
   snooze: number;
   registration?: Registration;
   nextAt?: number;
@@ -110,6 +112,8 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose each mission once and set its difficulty.");
   if (!validSound(a.sound))
     throw new Error("Choose a valid sound preference.");
+  if (a.silentMissions !== undefined && typeof a.silentMissions !== "boolean")
+    throw new Error("Choose a valid mission sound preference.");
 }
 export function mathQuestion(level: Alarm["difficulty"], random = Math.random) {
   const a = Math.floor(random() * (level === "bright" ? 15 : 8)) + 2;

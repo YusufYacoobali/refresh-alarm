@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
+import { AlarmSwitch } from "@/components/alarm-switch";
 import { Image } from "expo-image";
 import { pickWallpaper } from "@/services/wallpaper";
 import { LinearGradient } from "expo-linear-gradient";
@@ -210,6 +211,10 @@ export function AlarmEditor() {
             router.push({ pathname: "/challenges", params: { editing: "1" } })
           }
         />
+        <Row icon="volume-mute-outline" title="Silent during missions">
+          <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? false} onValueChange={silentMissions => updateDraft({ silentMissions })} />
+        </Row>
+        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 14, color: c.muted }}>Your alarm rings to wake you. Sound pauses while you solve missions.</T>
         <Row icon="image-outline" title="Alarm background" value={choosingPhoto ? "Opening photos…" : draft.wallpaper ? "Your photo" : "Choose a photo"} onPress={() => void chooseWallpaper()} />
         {draft.wallpaper && <View style={{ padding: 16, gap: 12 }}>
           <Image source={{ uri: draft.wallpaper }} contentFit="cover" style={{ height: 150, borderRadius: 16 }} accessibilityLabel="Selected alarm background" />

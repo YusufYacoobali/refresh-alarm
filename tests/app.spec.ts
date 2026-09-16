@@ -45,7 +45,7 @@ test("a scheduled one-off rings, snoozes, and is disabled on completion", async 
     page.getByText("Scheduled morning", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "A little longer · 5 min", exact: true })
+    .getByRole("button", { name: "Snooze · 5 min", exact: true })
     .click();
   await expect
     .poll(() =>

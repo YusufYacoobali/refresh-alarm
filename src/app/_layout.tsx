@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { View, Platform, AppState, StyleSheet } from "react-native";
-import { Stack, router, usePathname } from "expo-router";
+import { Stack, router, usePathname, useGlobalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -39,6 +39,9 @@ function AppContent() {
     seen = useRef(new Set<string>()),
     displayed = useRef<string | null>(null);
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ id?: string; eventId?: string; preview?: string }>();
+  const route = useRef({ pathname, ...params });
+  route.current = { pathname, ...params };
   useEffect(() => {
     if (pathname !== "/ringing" && pathname !== "/challenge")
       displayed.current = null;
@@ -49,15 +52,25 @@ function AppContent() {
   useEffect(() => {
     if (!ready) return;
     const open = (id: string, eventId: string) => {
+      const current = route.current;
+      const wakeScreen = current.pathname === "/ringing" || current.pathname === "/challenge";
+      if (wakeScreen && current.id === id && current.preview !== "1" &&
+          (!AndroidAlarm || current.eventId === eventId)) {
+        displayed.current = eventId;
+        return;
+      }
       if (
-        displayed.current === id ||
+        displayed.current === eventId ||
         (seen.current.has(eventId) && !AndroidAlarm) ||
         !snapshot.current.alarms.some((a) => a.id === id)
       )
         return;
-      displayed.current = id;
+      // The index route owns cold-start redirection, avoiding a competing push.
+      if (AndroidAlarm && current.pathname === "/") return;
+      displayed.current = eventId;
       seen.current.add(eventId);
-      router.push({ pathname: "/ringing", params: { id } });
+      const target = { pathname: "/ringing" as const, params: { id, eventId } };
+      if (wakeScreen) router.replace(target); else router.push(target);
     };
     const checkNative = async () => {
       if (AndroidAlarm) {
@@ -193,6 +206,7 @@ function AppContent() {
             headerShown: false,
             gestureEnabled: false,
             presentation: "fullScreenModal",
+            animation: "none",
           }}
         />
         <Stack.Screen
@@ -201,6 +215,7 @@ function AppContent() {
             headerShown: false,
             gestureEnabled: false,
             presentation: "fullScreenModal",
+            animation: "none",
           }}
         />
         <Stack.Screen

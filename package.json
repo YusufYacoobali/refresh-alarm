@@ -52,7 +52,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:unit": "tsx --test src/utils/alarms.test.ts",
+    "test:unit": "tsx --test src/utils/alarms.test.ts plugins/with-refresh-alarm.test.cjs",
     "test:e2e": "playwright test"
   },
   "private": true,

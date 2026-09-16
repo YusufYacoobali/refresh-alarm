@@ -12,9 +12,33 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.*
-import org.json.JSONObject
 
 class AlarmRingService : Service() {
+  companion object {
+    const val CHANNEL_ID = "refresh-ringing-v1"
+    private var running: AlarmRingService? = null
+    private var appVisible = false
+    @JvmStatic fun setAppVisible(visible: Boolean) {
+      appVisible = visible
+      if (!visible) running?.silence(false)
+    }
+    fun silenceMission(eventId: String, silent: Boolean) {
+      // Reject late JS mute requests after the screen has locked/backgrounded.
+      running?.takeIf { it.eventId == eventId }?.silence(silent && appVisible)
+    }
+    fun ensureChannel(context: android.content.Context) {
+      if (Build.VERSION.SDK_INT >= 26) context.getSystemService(NotificationManager::class.java).createNotificationChannel(
+        NotificationChannel(CHANNEL_ID, "Ringing alarms", NotificationManager.IMPORTANCE_HIGH).apply {
+          description = "Full-screen wake-up alarms"
+          lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+          setSound(null, null); enableVibration(false)
+        })
+    }
+  }
+  private val handler = Handler(Looper.getMainLooper())
+  private val resume = Runnable { silence(false) }
+  private var eventId: String? = null
+  private var silent = false
   private var player: MediaPlayer? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var focus: AudioFocusRequest? = null
@@ -23,18 +47,19 @@ class AlarmRingService : Service() {
   private val audioManager get() = getSystemService(AudioManager::class.java)
   override fun onBind(intent: Intent?) = null
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    val alarm = intent?.getStringExtra("alarm")?.let { JSONObject(it) } ?: AlarmStore.active(this)
+    // A replayed start command must not resurrect an already dismissed alarm.
+    val alarm = AlarmStore.active(this)
     if (alarm == null) { stopSelf(); return START_NOT_STICKY }
-    AlarmStore.setActive(this, alarm)
-    val notifications = getSystemService(NotificationManager::class.java)
-    if (Build.VERSION.SDK_INT >= 26) notifications.createNotificationChannel(
-      NotificationChannel("refresh-ringing-v1", "Ringing alarms", NotificationManager.IMPORTANCE_HIGH).apply {
-        description = "Full-screen wake-up alarms"
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        setSound(null, null); enableVibration(false)
-      })
+    if (eventId == alarm.getString("eventId")) return START_STICKY
+    eventId = alarm.getString("eventId")
+    running = this
+    silent = false
+    handler.removeCallbacks(resume)
+    ensureChannel(this)
+    AlarmWindow.refresh()
     val open = AlarmStore.launch(this, alarm.getString("id"))
-    val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "refresh-ringing-v1") else Notification.Builder(this)
+    val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL_ID) else Notification.Builder(this)
+    if (Build.VERSION.SDK_INT >= 31) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
     val notification = builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
       .setContentTitle(alarm.getString("label")).setContentText("Time to wake up · tap to complete your missions")
       .setCategory(Notification.CATEGORY_ALARM).setPriority(Notification.PRIORITY_MAX)
@@ -56,27 +81,50 @@ class AlarmRingService : Service() {
     val uri = if (alarm.has("soundUri")) Uri.parse(alarm.getString("soundUri")) else if (resId != 0) Uri.parse("android.resource://$packageName/$resId") else fallback
     play(uri, fallback, true)
     vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
-    if (Build.VERSION.SDK_INT >= 26) vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 300, 500, 1200), 0), attributes)
-    else vibrator?.vibrate(longArrayOf(0, 500, 300, 500, 1200), 0)
+    vibrate()
     return START_STICKY
   }
+  private fun vibrate() {
+    if (Build.VERSION.SDK_INT >= 26) vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 300, 500, 1200), 0), attributes)
+    else vibrator?.vibrate(longArrayOf(0, 500, 300, 500, 1200), 0)
+  }
+  private fun silence(value: Boolean) {
+    handler.removeCallbacks(resume)
+    if (silent != value) {
+      silent = value
+      player?.setVolume(if (value) 0f else 1f, if (value) 0f else 1f)
+      if (value) vibrator?.cancel() else vibrate()
+    }
+    // Renewed while the mission is visible; a stalled JS runtime must not leave
+    // an unfinished alarm permanently muted. Activity pause also restores it.
+    if (value) handler.postDelayed(resume, 30_000)
+  }
+  override fun onTaskRemoved(rootIntent: Intent?) { silence(false); super.onTaskRemoved(rootIntent) }
   private fun play(source: Uri, fallback: Uri, retry: Boolean) {
     player?.release()
     val next = MediaPlayer()
     player = next
     next.setAudioAttributes(attributes)
     next.isLooping = true
-    next.setOnPreparedListener { it.start() }
+    next.setOnPreparedListener {
+      if (player === it) {
+        it.setVolume(if (silent) 0f else 1f, if (silent) 0f else 1f)
+        it.start()
+      }
+    }
     next.setOnErrorListener { _, _, _ -> if (retry) play(fallback, fallback, false); true }
     try { next.setDataSource(this, source); next.prepareAsync() }
     catch (_: Exception) { if (retry) play(fallback, fallback, false) }
   }
   override fun onDestroy() {
+    handler.removeCallbacksAndMessages(null)
+    if (running === this) running = null
     player?.release(); player = null
     vibrator?.cancel()
     if (wakeLock?.isHeld == true) wakeLock?.release()
     if (Build.VERSION.SDK_INT >= 26) focus?.let { audioManager.abandonAudioFocusRequest(it) }
     else audioManager.abandonAudioFocus(null)
+    stopForeground(STOP_FOREGROUND_REMOVE)
     super.onDestroy()
   }
 }

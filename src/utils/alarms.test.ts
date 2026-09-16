@@ -94,3 +94,10 @@ test("mission validation rejects duplicates, invalid difficulty, and unknown kin
   assert.equal(missionDescription("shake", "bright"), "20 separate shakes");
   assert.equal(missionDescription("memory", "gentle"), "4 pairs · 2-second preview");
 });
+
+test("silent missions is optional for existing alarms and validates saved preferences", () => {
+  assert.doesNotThrow(() => validateAlarm(alarm));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, silentMissions: true }));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, silentMissions: false }));
+  assert.throws(() => validateAlarm({ ...alarm, silentMissions: "false" } as unknown as Alarm));
+});

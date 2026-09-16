@@ -49,6 +49,7 @@ const demo: Alarm = {
 function useWakeAlarm() {
   const params = useLocalSearchParams<{
     id?: string;
+    eventId?: string;
     preview?: string;
     kind?: Challenge;
     difficulty?: "gentle" | "bright";
@@ -81,23 +82,45 @@ function MissingAlarm() {
   );
 }
 export function Ringing() {
-  const { alarm, isPreview } = useWakeAlarm();
+  const { alarm, isPreview, eventId } = useWakeAlarm();
   const { finish, snooze, busy } = useApp();
   const insets = useSafeAreaInsets();
+  const acting = useRef(false);
+  const [working, setWorking] = useState(false);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
   async function stop() {
-    if (alarmMissions(alarm!).length)
-      router.replace({
-        pathname: "/challenge",
-        params: { id: alarm!.id, preview: isPreview ? "1" : "0" },
-      });
-    else {
-      await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
-      router.replace({
-        pathname: "/success",
-        params: { preview: isPreview ? "1" : "0" },
-      });
+    if (acting.current || busy) return;
+    acting.current = true;
+    setWorking(true);
+    try {
+      if (alarmMissions(alarm!).length)
+        router.replace({
+          pathname: "/challenge",
+          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId },
+        });
+      else {
+        await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
+        router.replace({
+          pathname: "/success",
+          params: { preview: isPreview ? "1" : "0" },
+        });
+      }
+    } catch {
+      acting.current = false;
+      setWorking(false);
+    }
+  }
+  async function snoozeAlarm() {
+    if (acting.current || busy) return;
+    acting.current = true;
+    setWorking(true);
+    try {
+      if (!isPreview) await withHapticFeedback(() => snooze(alarm!));
+      goHome();
+    } catch {
+      acting.current = false;
+      setWorking(false);
     }
   }
   return (
@@ -173,20 +196,14 @@ export function Ringing() {
             icon={
               alarmMissions(alarm).length === 0 ? "sunny-outline" : "arrow-forward"
             }
-            loading={busy}
+            loading={busy || working}
             haptic={alarmMissions(alarm).length === 0 ? false : "light"}
             onPress={() => void stop().catch(() => {})}
           />
           {alarm.snooze > 0 && <Tap
-            disabled={busy}
+            disabled={busy || working}
             haptic={isPreview ? "light" : false}
-            onPress={() =>
-              isPreview
-                ? goHome()
-                : void withHapticFeedback(() => snooze(alarm))
-                    .then(() => goHome())
-                    .catch(() => {})
-            }
+            onPress={() => void snoozeAlarm()}
           >
             <View
               style={{
@@ -259,14 +276,17 @@ function MathGame({
       ),
     [question],
   );
+  const answered = useRef(false);
+  useEffect(() => { answered.current = false; }, [question]);
   function answer(n: number) {
-    if (done) return;
+    if (done || answered.current) return;
     if (n !== question.answer) {
       setFeedback(f => ({ revision: f.revision + 1, kind: "error" }));
       setWrong(n);
       haptic("error");
       return;
     }
+    answered.current = true;
     setWrong(null);
     setFeedback(f => ({ revision: f.revision + 1, kind: "success" }));
     const next = count + 1;
@@ -545,6 +565,9 @@ export function ChallengeScreen() {
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
+  const [silent, setSilent] = useState(alarm?.silentMissions ?? false);
+  const finishing = useRef(false);
+  const [working, setWorking] = useState(false);
   const advancing = useRef(false);
   useEffect(() => { advancing.current = false; }, [missionIndex]);
   usePreventBack();
@@ -554,12 +577,20 @@ export function ChallengeScreen() {
   const challenge = fallback ? "math" : mission?.kind ?? "none";
   const level = mission?.difficulty ?? "gentle";
   async function complete() {
+    if (finishing.current || busy) return;
+    finishing.current = true;
+    setWorking(true);
     setCompleted(true);
-    await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
-    router.replace({
-      pathname: "/success",
-      params: { preview: isPreview ? "1" : "0" },
-    });
+    try {
+      await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
+      router.replace({
+        pathname: "/success",
+        params: { preview: isPreview ? "1" : "0" },
+      });
+    } finally {
+      finishing.current = false;
+      setWorking(false);
+    }
   }
   function nextMission() {
     if (advancing.current) return;
@@ -572,7 +603,7 @@ export function ChallengeScreen() {
   }
   return (
     <Screen style={{ paddingTop: inset.top + (height < 700 ? 16 : 26), gap: height < 700 ? 16 : 24 }}>
-      <AlarmSound alarm={alarm} preview={isPreview} />
+      <AlarmSound alarm={alarm} preview={isPreview} silent={silent} />
       <View
         style={{
           flexDirection: "row",
@@ -602,13 +633,19 @@ export function ChallengeScreen() {
               : "Solve the math"}
         </T>
       </View>
+      <Tap label={silent ? "Turn mission sound on" : "Silence mission sound"} selected={silent} onPress={() => setSilent(value => !value)}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44 }}>
+          <Icon name={silent ? "volume-mute-outline" : "volume-high-outline"} size={20} color={c.lavender} />
+          <T variant="small" style={{ color: c.lavender }}>{silent ? "Sound off during missions" : "Sound on · tap to silence"}</T>
+        </View>
+      </Tap>
       {completed || !mission ? (
         <>
           <T variant="heading">You did it.</T>
           <Button
             title="Finish waking up"
             haptic={false}
-            loading={busy}
+            loading={busy || working}
             onPress={() => void complete().catch(() => {})}
           />
         </>
@@ -634,7 +671,7 @@ export function ChallengeScreen() {
         />
       )}
       {!isPreview && (
-        <Tap disabled={busy} haptic={false} onPress={() => void complete().catch(() => {})}>
+        <Tap disabled={busy || working} haptic={false} onPress={() => void complete().catch(() => {})}>
           <T variant="small" style={{ color: c.faint, textAlign: "center" }}>
             I need to stop this alarm
           </T>

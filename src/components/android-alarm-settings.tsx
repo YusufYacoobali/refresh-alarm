@@ -13,7 +13,8 @@ export function AndroidAlarmSettings() {
   if (!AndroidAlarm || !access) return null;
   return <Card>
     <Row icon="alarm-outline" title="Alarms & reminders" value={access.exact ? "Allowed" : "Enable"} onPress={() => void AndroidAlarm!.openSettings("exact").catch(() => Linking.openSettings())} />
-    <Row icon="phone-portrait-outline" title="Lock-screen alarms" value={access.fullScreen ? "Allowed" : "Enable"} onPress={() => void AndroidAlarm!.openSettings("fullScreen").catch(() => Linking.openSettings())} last />
+    <Row icon="phone-portrait-outline" title="Lock-screen alarms" value={access.fullScreen ? "Allowed" : "Enable"} onPress={() => void AndroidAlarm!.openSettings("fullScreen").catch(() => Linking.openSettings())} />
+    <Row icon="notifications-outline" title="Ringing alarm notifications" value={access.notifications && access.channel ? "Allowed" : "Enable"} onPress={() => void AndroidAlarm!.openSettings("channel").catch(() => Linking.openSettings())} last />
     <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>Uses your phone’s alarm volume. Allow alarms in Do Not Disturb if you use it overnight.</T>
   </Card>;
 }
