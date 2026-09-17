@@ -24,7 +24,7 @@ test("each onboarding CTA plays its own one-shot animation and ignores duplicate
       await expect(motion).toHaveCount(0);
     }
   }
-  await expect(page.getByRole("button", { name: "Set your first alarm", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create an alarm", exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).onboardingHaptics)).toEqual([[40], [40], [40], [40, 100, 40]]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).onboarded)).toBe(true);
   expect(errors).toEqual([]);
@@ -49,7 +49,7 @@ test("reduced motion skips button travel and a failed finish remains retryable",
   await expect(page.getByText("Could not save setup", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable alarms", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Enable alarms", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Set your first alarm", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create an alarm", exact: true })).toBeVisible();
 });
 
 test("onboarding shows original artwork, slides smoothly, and pauses inactive Lottie scenes", async ({ page }) => {

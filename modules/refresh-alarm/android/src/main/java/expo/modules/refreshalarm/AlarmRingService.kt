@@ -142,8 +142,8 @@ class AlarmRingService : Service() {
   }
   private fun touchMission() {
     val active = AlarmStore.active(this) ?: return
-    if (active.optString("eventId") != eventId || !active.optBoolean("missionReminder", true)) return
-    // An interaction delivered after the deadline cannot cancel an overdue reminder.
+    if (active.optString("eventId") != eventId) return
+    // JS calls this once per mission, never for individual answers or shakes.
     if (AlarmPlaybackPolicy.expired(missionDeadline, SystemClock.elapsedRealtime())) { remind(); return }
     missionDeadline = SystemClock.elapsedRealtime() + AlarmPlaybackPolicy.MISSION_IDLE_MS
     active.put("missionDeadline", missionDeadline)

@@ -242,11 +242,7 @@ export function AlarmEditor() {
         <Row icon="volume-mute-outline" title="Silent during missions">
           <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? data.silentMissions ?? true} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>
-        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 14, color: c.muted }}>Pause sound while you solve. Locking your phone brings the sound back.</T>
-        <Row icon="refresh-outline" title="Ring again if I drift off" last>
-          <AlarmSwitch label="Ring again if I drift off" testID="mission-reminder" disabled={busy} value={draft.missionReminder !== false} onValueChange={missionReminder => updateDraft({ missionReminder })} />
-        </Row>
-        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>After 1 minute without a mission answer, card flip, or shake, the alarm rings again and your missions restart.</T>
+        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>Each mission has a 1-minute timer. If it runs out, the alarm rings again and all missions restart.</T>
         </>}
       </Card>
       <Card>

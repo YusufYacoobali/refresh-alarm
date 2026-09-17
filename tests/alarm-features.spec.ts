@@ -4,6 +4,7 @@ test.beforeEach(async ({ page }) => { await page.emulateMedia({ reducedMotion: "
 
 async function seed(page: Page, missionReminder = true) {
   await page.addInitScript(reminder => {
+    if (localStorage.getItem("daybreak.state.v1")) return;
     localStorage.setItem("daybreak.state.v1", JSON.stringify({
       version: 1, onboarded: true, theme: "serene", journal: [], completions: [],
       alarms: [{ id: "features", hour: 23, minute: 59, days: [], label: "Gentle start", enabled: true,
@@ -29,11 +30,11 @@ test("simple editor saves individual volume, fade and mission preferences", asyn
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await expect(slider).toHaveCount(0);
   await page.getByRole("switch", { name: "Silent during missions", exact: true }).click();
-  await page.getByRole("switch", { name: "Ring again if I drift off", exact: true }).click();
+  await expect(page.getByRole("switch", { name: "Ring again if I drift off", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   const alarm = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0]);
-  expect(alarm).toMatchObject({ volume: .45, volumeRampSeconds: 120, silentMissions: false, missionReminder: false });
+  expect(alarm).toMatchObject({ volume: .45, volumeRampSeconds: 120, silentMissions: false });
   await page.reload();
   await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
   await page.getByRole("button", { name: /Sound & volume/ }).click();
@@ -67,19 +68,25 @@ test("alarm audio rises to its chosen volume and an idle mission rings again", a
   expect(await audio.evaluate(el => (el as HTMLAudioElement).volume)).toBeCloseTo(.6);
 });
 
-test("actual mission interaction renews the minute, and finishing cancels it", async ({ page }) => {
+test("answers do not extend the mission timer, and finishing cancels it", async ({ page }) => {
   await seed(page);
   await page.clock.install({ time: new Date("2026-09-16T12:00:00") });
   await page.goto("/challenge?id=features");
   await expect(page.getByTestId("math-question")).toBeVisible();
+  await expect(page.getByTestId("mission-timer")).toHaveText("1:00");
   await page.clock.fastForward(50_000);
   const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
   await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
   await expect(page.getByText("1 of 3", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mission-timer")).toHaveText("0:10");
   await page.clock.fastForward(20_000);
+  await expect(page.getByRole("button", { name: "Wake up my mind", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
   await expect(page.getByTestId("math-question")).toBeVisible();
+  await expect(page.getByText("0 of 3", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mission-timer")).toHaveText("1:00");
   await expect(page.getByRole("button", { name: "I need to stop this alarm", exact: true })).toHaveCount(0);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
     await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
   }
@@ -89,12 +96,36 @@ test("actual mission interaction renews the minute, and finishing cancels it", a
   await expect(page.locator("audio")).toHaveCount(0);
 });
 
-test("mission reminder can be switched off for an alarm", async ({ page }) => {
+test("older alarms with reminders disabled still get the required mission timer", async ({ page }) => {
   await seed(page, false);
   await page.clock.install({ time: new Date("2026-09-16T12:00:00") });
   await page.goto("/challenge?id=features");
   await expect(page.getByTestId("math-question")).toBeVisible();
   await page.clock.fastForward(120_000);
+  await expect(page.getByRole("button", { name: "Wake up my mind", exact: true })).toBeVisible();
+  await expect(page.getByTestId("mission-timer")).toHaveCount(0);
+});
+
+test("each mission gets a fresh minute and a timeout restarts the entire sequence", async ({ page }) => {
+  await seed(page);
+  await page.clock.install({ time: new Date("2026-09-16T12:00:00") });
+  await page.goto("/alarms");
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("daybreak.state.v1")!);
+    data.alarms[0].missions = [{ kind: "math", difficulty: "gentle" }, { kind: "memory", difficulty: "gentle" }];
+    localStorage.setItem("daybreak.state.v1", JSON.stringify(data));
+  });
+  await page.goto("/challenge?id=features");
   await expect(page.getByTestId("math-question")).toBeVisible();
-  await expect(page.locator("audio")).toHaveCount(0);
+  await page.clock.fastForward(45_000);
+  for (let i = 0; i < 3; i++) {
+    const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
+    await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
+  }
+  await expect(page.getByText("Mission 2 of 2", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mission-timer")).toHaveText("1:00");
+  await page.clock.fastForward(61_000);
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  await expect(page.getByText("Mission 1 of 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("0 of 3", { exact: true })).toBeVisible();
 });

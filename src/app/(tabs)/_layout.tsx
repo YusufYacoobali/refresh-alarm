@@ -19,6 +19,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   return (
     <Tabs
+      initialRouteName="alarms"
       screenListeners={{ tabPress: () => haptic("selection") }}
       screenOptions={{
         headerShown: false,
@@ -44,7 +45,7 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: "Home",
           tabBarIcon: ({ color, focused }) => (

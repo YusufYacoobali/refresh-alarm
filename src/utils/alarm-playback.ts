@@ -1,4 +1,8 @@
-export const MISSION_IDLE_MS = 60_000;
+export const MISSION_LIMIT_MS = 60_000;
+
+export function missionSecondsLeft(deadline: number, now: number) {
+  return Math.max(0, Math.min(60, Math.ceil((deadline - now) / 1000)));
+}
 
 /** Gain relative to the chosen alarm volume. A reminder rings at full chosen volume. */
 export function alarmGain(elapsedMs: number, rampSeconds = 0) {

@@ -35,8 +35,24 @@ public struct OpenDaybreakIntent: LiveActivityIntent {
 }
 
 public class DaybreakAlarmKitModule: Module {
+  private var alarmUpdatesTask: Task<Void, Never>?
+
   public func definition() -> ModuleDefinition {
     Name("DaybreakAlarmKit")
+    Events("onAlarmStateChange")
+    OnCreate { [weak self] in
+      guard #available(iOS 26.0, *) else { return }
+      self?.alarmUpdatesTask = Task { [weak self] in
+        for await _ in AlarmManager.shared.alarmUpdates {
+          if Task.isCancelled { break }
+          self?.sendEvent("onAlarmStateChange", [:])
+        }
+      }
+    }
+    OnDestroy { [weak self] in
+      self?.alarmUpdatesTask?.cancel()
+      self?.alarmUpdatesTask = nil
+    }
     AsyncFunction("prepareCustomSound") { (uri: String, value: String) throws -> String in
       guard let id = UUID(uuidString: value), let url = URL(string: uri), url.isFileURL else { throw Self.error("Invalid imported audio file.") }
       let files = FileManager.default
@@ -127,6 +143,19 @@ public class DaybreakAlarmKitModule: Module {
       let value = UserDefaults.standard.string(forKey: "daybreak.pendingAlarm")
       UserDefaults.standard.removeObject(forKey: "daybreak.pendingAlarm")
       return value
+    }
+    // Keep the handoff durable until the app successfully completes the alarm.
+    // Reading it on launch/resume must not lose an unfinished wake-up session.
+    Function("activeAlarm") { () -> String? in
+      UserDefaults.standard.string(forKey: "daybreak.pendingAlarm")
+    }
+    Function("beginAlarm") { (alarmId: String) in
+      UserDefaults.standard.set(alarmId, forKey: "daybreak.pendingAlarm")
+    }
+    Function("completeAlarm") { (alarmId: String) in
+      if UserDefaults.standard.string(forKey: "daybreak.pendingAlarm") == alarmId {
+        UserDefaults.standard.removeObject(forKey: "daybreak.pendingAlarm")
+      }
     }
   }
   @available(iOS 26.0, *)

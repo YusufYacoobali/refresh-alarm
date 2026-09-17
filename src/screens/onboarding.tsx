@@ -91,7 +91,7 @@ export function Onboarding() {
       // Persistence starts on press; the short visual handoff has a fixed fallback
       // and never depends on Lottie loading or its completion callback.
       await settled;
-      if (mounted.current) router.replace("/(tabs)");
+      if (mounted.current) router.replace("/(tabs)/alarms");
     } catch (error) {
       clearError();
       setMessage(error instanceof Error ? error.message : "Couldn’t finish setup. Please try again.");

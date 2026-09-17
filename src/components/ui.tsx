@@ -345,7 +345,7 @@ export function BackHome() {
   return (
     <Button
       title="Back to home"
-      onPress={() => router.replace("/(tabs)")}
+      onPress={() => router.replace("/(tabs)/alarms")}
       icon="arrow-forward"
     />
   );

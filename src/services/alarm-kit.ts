@@ -17,6 +17,10 @@ export type AlarmKitBridge = {
   cancel(id: string): Promise<void>;
   stop(id: string): Promise<void>;
   consumePendingAlarm(): string | null;
+  activeAlarm?(): string | null;
+  beginAlarm?(alarmId: string): void;
+  completeAlarm?(alarmId: string): void;
+  addListener?(event: "onAlarmStateChange", listener: () => void): { remove(): void };
   getAlarms(): Promise<{ id: string; state: string }[]>;
 };
 export default requireOptionalNativeModule<AlarmKitBridge>("DaybreakAlarmKit");

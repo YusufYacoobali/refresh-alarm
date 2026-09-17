@@ -38,11 +38,11 @@ test("a scheduled one-off rings with one action and is disabled on completion", 
   );
   await page.reload();
   await expect(
-    page.getByText("YOUR NEXT ALARM", { exact: true }),
+    page.getByRole("tab", { name: "Alarms", exact: true }),
   ).toBeVisible();
   await page.clock.fastForward(60000);
   await expect(
-    page.getByText("Scheduled morning", { exact: true }),
+    page.getByTestId("alarm-wallpaper-screen").getByText("Scheduled morning", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /Snooze/ })).toHaveCount(0);
   await page
@@ -103,7 +103,7 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
     .getByRole("button", { name: "Enable alarms", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Set your first alarm", exact: true })
+    .getByRole("button", { name: "Create an alarm", exact: true })
     .click();
   await page.getByLabel("Alarm hour", { exact: true }).press("ArrowDown");
   for (let i = 0; i < 35; i++) await page.getByLabel("Alarm minute", { exact: true }).press("ArrowDown");

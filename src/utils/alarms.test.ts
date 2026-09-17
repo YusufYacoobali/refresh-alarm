@@ -1,5 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { missionSecondsLeft } from "./alarm-playback";
+
+test("mission countdown uses elapsed wall time, including time spent asleep", () => {
+  const deadline = 100_000;
+  assert.equal(missionSecondsLeft(deadline, 40_000), 60);
+  assert.equal(missionSecondsLeft(deadline, 99_001), 1);
+  assert.equal(missionSecondsLeft(deadline, 100_000), 0);
+  assert.equal(missionSecondsLeft(deadline, 180_000), 0);
+});
 import {
   nextOccurrence,
   repeatLabel,

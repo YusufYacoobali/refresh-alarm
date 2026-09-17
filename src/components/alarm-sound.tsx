@@ -7,8 +7,9 @@ import { stopAlarm } from "@/services/scheduler";
 import { useSoundPlayer } from "./use-sound-player";
 import { Button } from "./ui";
 import AndroidAlarm from "@/services/android-alarm";
+import { cancelMissionTimeout } from "@/services/mission-timeout";
 
-export function AlarmSound({ alarm, preview, playPreview = false, silent = false, immediate = false }: { alarm: Alarm; preview: boolean; playPreview?: boolean; silent?: boolean; immediate?: boolean }) {
+export function AlarmSound({ alarm, preview, playPreview = false, ringing = false, silent = false, immediate = false }: { alarm: Alarm; preview: boolean; playPreview?: boolean; ringing?: boolean; silent?: boolean; immediate?: boolean }) {
   const { play, stop, error, playing } = useSoundPlayer();
   const [handoffError, setHandoffError] = useState(false);
   const latest = useRef(alarm); latest.current = alarm;
@@ -37,6 +38,7 @@ export function AlarmSound({ alarm, preview, playPreview = false, silent = false
       try {
         // Transfer the audible alarm to the foreground app, avoiding two players.
         if (!preview && !transferred) {
+          if (ringing) await cancelMissionTimeout();
           await stopAlarm(latest.current);
           transferred = true;
         }
@@ -59,7 +61,7 @@ export function AlarmSound({ alarm, preview, playPreview = false, silent = false
     const retry = Platform.OS === "ios" && (!preview || playPreview) ? setInterval(recover, 1500) : undefined;
     const sub = AppState.addEventListener("change", recover);
     return () => { cancelled = true; clearInterval(retry); sub.remove(); stop(); };
-  }, [alarm.id, alarm.sound, preview, playPreview, silent, immediate, play, stop]));
+  }, [alarm.id, alarm.sound, preview, playPreview, ringing, silent, immediate, play, stop]));
   if (AndroidAlarm && !preview) return handoffError ? <Button title="Retry mission sound" secondary onPress={() => {
     const active = AndroidAlarm!.activeAlarm();
     if (active?.alarmId === alarm.id) void AndroidAlarm!.setMissionSilenced(active.eventId, silent)

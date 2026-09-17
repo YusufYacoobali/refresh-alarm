@@ -65,7 +65,8 @@ xcodebuild -workspace ios/Refresh.xcworkspace -scheme Refresh \
 
 Then run a signed build on an iOS 26+ iPhone and follow
 [device verification](device-verification.md), especially AlarmKit authorization,
-locked/silent/Focus delivery, cold-launch Wake up, snooze, and stop/cancel.
+locked/silent/Focus delivery, the single stop slider opening the alarm wallpaper,
+one-minute mission backups, cold-launch routing, and completion/cancel cleanup.
 On iOS 16.4–25, verify the documented notification fallback instead.
 
 TypeScript checks, Expo diagnostics, successful patch application, and an iOS

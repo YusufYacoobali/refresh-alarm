@@ -113,7 +113,7 @@ export function Ringing() {
     }
   }
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View testID="alarm-wallpaper-screen" style={{ flex: 1, backgroundColor: c.bg }}>
       <Float style={{ position: "absolute", inset: -10 }} distance={5}><Image
         source={alarm.wallpaper ? { uri: alarm.wallpaper } : art.alarmValley}
         contentFit="cover"
@@ -176,7 +176,7 @@ export function Ringing() {
         <View style={{ flex: 1, minHeight: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
         </View>
         <View style={{ width: "100%", gap: 16 }}>
-        <AlarmSound alarm={alarm} preview={isPreview} immediate={reminder === "1"} />
+        <AlarmSound alarm={alarm} preview={isPreview} ringing immediate={reminder === "1"} />
           <Button
             title={
               alarmMissions(alarm).length === 0 ? "Hello, new day" : "Wake up my mind"
@@ -222,11 +222,9 @@ function Progress({ value, total, label = true }: { value: number; total: number
 function MathGame({
   difficulty,
   onDone,
-  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
-  onActivity(): void;
 }) {
   const [question, setQuestion] = useState(() => mathQuestion(difficulty)),
     [count, setCount] = useState(0),
@@ -248,7 +246,6 @@ function MathGame({
   useEffect(() => { answered.current = false; }, [question]);
   function answer(n: number) {
     if (done || answered.current) return;
-    onActivity();
     if (n !== question.answer) {
       setFeedback(f => ({ revision: f.revision + 1, kind: "error" }));
       setWrong(n);
@@ -335,11 +332,9 @@ function MemoryTile({ tile, revealed, matched, height }: { tile: number; reveale
 function MemoryGame({
   difficulty,
   onDone,
-  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
-  onActivity(): void;
 }) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -363,7 +358,6 @@ function MemoryGame({
   function flip(i: number) {
     if (peek || locked.current || matched.includes(i) || open.includes(i))
       return;
-    onActivity();
     const next = [...open, i];
     setOpen(next);
     if (next.length !== 2) {
@@ -427,13 +421,11 @@ function ShakeGame({
   onDone,
   onFallback,
   isPreview,
-  onActivity,
 }: {
   difficulty: Alarm["difficulty"];
   onDone(): void;
   onFallback(): void;
   isPreview: boolean;
-  onActivity(): void;
 }) {
   const [count, setCount] = useState(0),
     [status, setStatus] = useState("ready");
@@ -447,7 +439,6 @@ function ShakeGame({
   doneRef.current = onDone;
   function register() {
     if (counter.current >= target) return;
-    onActivity();
     counter.current++;
     setCount(counter.current);
     if (counter.current === target) doneRef.current();
@@ -532,12 +523,12 @@ function ShakeGame({
 export function ChallengeScreen() {
   const { height } = useWindowDimensions();
   const { alarm, isPreview, kind, difficulty, eventId } = useWakeAlarm();
-  const { activity, error: reminderError } = useMissionReminder(alarm, isPreview, eventId);
   const { finish, busy, data, setMissionSilenced } = useApp();
   const inset = useSafeAreaInsets();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
+  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, missionIndex, completed);
   const silent = alarm?.silentMissions ?? data.silentMissions ?? true;
   const finishing = useRef(false);
   const [working, setWorking] = useState(false);
@@ -567,7 +558,7 @@ export function ChallengeScreen() {
     }
   }
   function nextMission() {
-    if (advancing.current) return;
+    if (advancing.current || isExpired()) return;
     advancing.current = true;
     if (missionIndex + 1 < missions.length) {
       haptic("success");
@@ -601,7 +592,13 @@ export function ChallengeScreen() {
           </Tap>
         )}
       </View>
-      {missions.length > 1 && <T variant="small" accessibilityLiveRegion="polite" style={{ color: c.muted }}>Mission {missionIndex + 1} of {missions.length}</T>}
+      {!completed && <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <T variant="small" style={{ color: c.muted }}>Mission {missionIndex + 1} of {missions.length}</T>
+        <T testID="mission-timer" accessibilityLabel={`${secondsLeft} seconds remaining`} variant="label"
+          style={{ color: secondsLeft <= 10 ? c.peach : c.lavender, fontVariant: ["tabular-nums"] }}>
+          {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
+        </T>
+      </View>}
       {reminderError && <T variant="small" style={{ color: c.peach, textAlign: "center" }}>
         Couldn’t start the reminder. Keep the alarm sound on.
       </T>}
@@ -620,7 +617,6 @@ export function ChallengeScreen() {
           key={`memory-${missionIndex}`}
           difficulty={level}
           onDone={nextMission}
-          onActivity={activity}
         />
       ) : challenge === "shake" ? (
         <ShakeGame
@@ -629,14 +625,12 @@ export function ChallengeScreen() {
           isPreview={isPreview}
           onFallback={() => setFallback(true)}
           onDone={nextMission}
-          onActivity={activity}
         />
       ) : (
         <MathGame
           key={`math-${missionIndex}-${fallback}`}
           difficulty={level}
           onDone={nextMission}
-          onActivity={activity}
         />
       )}
     </Screen>

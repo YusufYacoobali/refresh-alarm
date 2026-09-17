@@ -10,6 +10,7 @@ import * as Crypto from "expo-crypto";
 import { AppState, Platform } from "react-native";
 import AlarmKit from "@/services/alarm-kit";
 import AndroidAlarm from "@/services/android-alarm";
+import { cancelMissionTimeout } from "@/services/mission-timeout";
 import { CustomSound, setCustomSounds } from "@/utils/sounds";
 import {
   Alarm,
@@ -138,6 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (
           !alarm.enabled ||
           alarm.days.length ||
+          AlarmKit?.activeAlarm?.() === alarm.id ||
           before.snoozed?.alarmId === alarm.id
         )
           return alarm;
@@ -260,6 +262,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   const finish = (alarm: Alarm) =>
     transaction(async () => {
+      await cancelMissionTimeout();
       await stopAlarm(alarm);
       if (current.current.snoozed?.alarmId === alarm.id)
         await cancelRegistration(current.current.snoozed.registration);
@@ -278,6 +281,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ),
         completions: [...new Set([...current.current.completions, today])],
       });
+      AlarmKit?.completeAlarm?.(alarm.id);
     });
   const snooze = (alarm: Alarm) =>
     transaction(async () => {
