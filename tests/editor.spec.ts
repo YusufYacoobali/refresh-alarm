@@ -103,13 +103,13 @@ test("the full mission sequence finishes only after the last mission", async ({ 
     if (!localStorage.getItem("daybreak.state.v1")) localStorage.setItem("daybreak.state.v1", JSON.stringify({ version: 1, onboarded: true, theme: "serene", journal: [], completions: [], alarms: [{ id: "sequence", hour: 23, minute: 59, days: [], label: "Three little wins", enabled: true, sound: "system", challenge: "math", difficulty: "gentle", snooze: 0, missions: [{ kind: "math", difficulty: "bright" }, { kind: "memory", difficulty: "gentle" }, { kind: "shake", difficulty: "gentle" }] }] }));
   });
   await page.goto("/challenge?id=sequence");
-  await expect(page.getByText("Mission 1 of 3 · Math puzzle")).toBeVisible();
+  await expect(page.getByText("Mission 1 of 3")).toBeVisible();
   for (let i = 0; i < 3; i++) {
     await expect(page.getByTestId("math-question")).toHaveText(/^\d+ × \d+$/, { useInnerText: true });
     const [a, b] = (await page.getByTestId("math-question").innerText()).split("×").map(Number);
     await page.getByRole("button", { name: `Answer ${a * b}`, exact: true }).click();
   }
-  await expect(page.getByText("Mission 2 of 3 · Memory match")).toBeVisible();
+  await expect(page.getByText("Mission 2 of 3")).toBeVisible();
   const pairs: Record<string, number[]> = {};
   for (let i = 1; i <= 8; i++) {
     const label = await page.getByRole("button", { name: new RegExp(`^Card ${i}:`) }).getAttribute("aria-label");
@@ -120,7 +120,7 @@ test("the full mission sequence finishes only after the last mission", async ({ 
     for (const i of pair) await page.getByRole("button", { name: `Reveal card ${i}`, exact: true }).click();
     await page.waitForTimeout(400);
   }
-  await expect(page.getByText("Mission 3 of 3 · Shake to wake")).toBeVisible();
+  await expect(page.getByText("Mission 3 of 3")).toBeVisible();
   const before = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!));
   expect(before.completions).toHaveLength(0);
   expect(before.alarms[0].enabled).toBe(true);

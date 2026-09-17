@@ -73,6 +73,8 @@ function AppContent() {
       if (wakeScreen) router.replace(target); else router.push(target);
     };
     const checkNative = async () => {
+      // Let the index redirect finish before consuming a cold-launch intent.
+      if (route.current.pathname === "/") return;
       if (AndroidAlarm) {
         const active = AndroidAlarm.activeAlarm();
         if (active) open(active.alarmId, active.eventId);
@@ -153,7 +155,7 @@ function AppContent() {
       receive.remove();
       respond.remove();
     };
-  }, [ready]);
+  }, [ready, pathname]);
   if (!ready)
     return (
       <View style={styles.loading}>

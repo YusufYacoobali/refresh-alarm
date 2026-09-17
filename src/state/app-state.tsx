@@ -32,6 +32,7 @@ type Data = {
   journal: JournalEntry[];
   completions: string[];
   customSounds?: CustomSound[];
+  silentMissions?: boolean;
   snoozed?: { alarmId: string; at: number; registration: Registration };
 };
 const initial: Data = {
@@ -74,6 +75,7 @@ type Context = {
   saveAlarm(alarm: Alarm): Promise<void>;
   deleteAlarm(alarm: Alarm): Promise<void>;
   update(patch: Partial<Data>): Promise<void>;
+  setMissionSilenced(alarmId: string | null, silent: boolean): Promise<void>;
   addCustomSound(sound: CustomSound): Promise<void>;
   finish(alarm: Alarm): Promise<void>;
   snooze(alarm: Alarm): Promise<void>;
@@ -326,6 +328,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         edit: (a) => setDraft(a ? { ...a, days: [...a.days] } : newAlarm()),
         updateDraft: (patch) => setDraft((d) => (d ? { ...d, ...patch } : d)),
         update,
+        // Saving a playback preference must not reschedule an active alarm.
+        setMissionSilenced: (alarmId, silent) => transaction(() => persist({
+          ...current.current,
+          silentMissions: silent,
+          alarms: current.current.alarms.map(a => a.id === alarmId ? { ...a, silentMissions: silent } : a),
+        })),
         addCustomSound: (sound) => transaction(() => persist({ ...current.current, customSounds: [...(current.current.customSounds ?? []), sound] })),
         saveAlarm,
         deleteAlarm,

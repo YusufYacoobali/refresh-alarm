@@ -11,7 +11,8 @@ Pod::Spec.new do |s|
   s.source         = { git: '' }
   s.static_framework = true
   s.weak_frameworks = 'AlarmKit'
-  s.swift_version = '5.9'
+  # SWIFT_VERSION is a language mode, not the compiler release (5.9 is invalid).
+  s.swift_version = '5.0'
 
   s.dependency 'ExpoModulesCore'
 

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("a scheduled one-off rings, snoozes, and is disabled on completion", async ({
+test("a scheduled one-off rings with one action and is disabled on completion", async ({
   page,
 }) => {
   const time = new Date(2026, 8, 15, 7, 59, 0);
@@ -44,19 +44,7 @@ test("a scheduled one-off rings, snoozes, and is disabled on completion", async 
   await expect(
     page.getByText("Scheduled morning", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Snooze · 5 min", exact: true })
-    .click();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem("daybreak.state.v1")!).snoozed
-            ?.alarmId,
-      ),
-    )
-    .toBe("scheduled-test");
-  await page.clock.fastForward(300000);
+  await expect(page.getByRole("button", { name: /Snooze/ })).toHaveCount(0);
   await page
     .getByRole("button", { name: "Hello, new day", exact: true })
     .click();

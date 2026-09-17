@@ -33,7 +33,7 @@ test("simple editor saves individual volume, fade and mission preferences", asyn
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   const alarm = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0]);
-  expect(alarm).toMatchObject({ volume: .45, volumeRampSeconds: 120, silentMissions: true, missionReminder: false });
+  expect(alarm).toMatchObject({ volume: .45, volumeRampSeconds: 120, silentMissions: false, missionReminder: false });
   await page.reload();
   await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
   await page.getByRole("button", { name: /Sound & volume/ }).click();
@@ -78,7 +78,11 @@ test("actual mission interaction renews the minute, and finishing cancels it", a
   await expect(page.getByText("1 of 3", { exact: true })).toBeVisible();
   await page.clock.fastForward(20_000);
   await expect(page.getByTestId("math-question")).toBeVisible();
-  await page.getByRole("button", { name: "I need to stop this alarm", exact: true }).click();
+  await expect(page.getByRole("button", { name: "I need to stop this alarm", exact: true })).toHaveCount(0);
+  for (let i = 0; i < 2; i++) {
+    const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
+    await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
+  }
   await expect(page.getByText("First win of the day.")).toBeVisible();
   await page.clock.fastForward(65_000);
   await expect(page.getByText("First win of the day.")).toBeVisible();

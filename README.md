@@ -34,9 +34,15 @@ The browser preview runs at the URL printed by Expo. Browser alarms are explicit
 AlarmKit is custom Swift code, so it cannot run inside Expo Go. Use a Mac with Xcode 26.4 or later to build with Expo SDK 57 and compile the AlarmKit integration:
 
 ```sh
+npm ci
 npx expo prebuild --platform ios
 npx expo run:ios --device
 ```
+
+The install step applies the checked-in `expo-modules-jsi@57.1.0` patch for the
+`RuntimeScheduler` constructor and Swift pointer-capture compiler errors. Keep
+install scripts enabled. For an existing Mac checkout with the earlier workaround,
+follow [iOS build recovery and validation](docs/ios-build.md) before rebuilding.
 
 `modules/daybreak-alarm-kit` is discovered by Expo local-module autolinking. Its podspec weak-links AlarmKit, and all framework usage is availability-guarded for iOS 26. `NSAlarmKitUsageDescription` is configured in `app.json`. Use your own bundle identifier/signing team for a physical device. `eas.json` includes development, preview, and production profiles if you choose EAS Build; no EAS project, account, or signing credentials have been configured.
 

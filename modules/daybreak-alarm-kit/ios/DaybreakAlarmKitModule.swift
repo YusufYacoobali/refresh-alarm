@@ -82,8 +82,8 @@ public class DaybreakAlarmKitModule: Module {
       let alert = AlarmPresentation.Alert(
         title: LocalizedStringResource(stringLiteral: input.label),
         stopButton: AlarmButton(text: "Stop", textColor: .white, systemImageName: "stop.circle"),
-        secondaryButton: AlarmButton(text: "Wake up", textColor: .white, systemImageName: "sun.max.fill"),
-        secondaryButtonBehavior: .custom
+        secondaryButton: nil,
+        secondaryButtonBehavior: nil
       )
       let attributes = AlarmAttributes<DaybreakMetadata>(
         presentation: AlarmPresentation(alert: alert),
@@ -100,9 +100,12 @@ public class DaybreakAlarmKitModule: Module {
         else { throw Self.error("This alarm sound is missing. Import it again or choose another sound.") }
         sound = .named(name)
       } else { sound = .default }
+      // Show only the system stop control and use it to open the mission flow;
+      // stopping the system sound must not mark the app's mission complete.
       let configuration = AlarmManager.AlarmConfiguration<DaybreakMetadata>.alarm(
         schedule: schedule, attributes: attributes,
-        secondaryIntent: OpenDaybreakIntent(alarmId: input.alarmId), sound: sound
+        stopIntent: OpenDaybreakIntent(alarmId: input.alarmId),
+        sound: sound
       )
       _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
     }

@@ -240,7 +240,7 @@ export function AlarmEditor() {
         {section === "missions" && <>
         <Row icon="extension-puzzle-outline" title="Choose missions" value={draft.missions?.length ? `${draft.missions.length} selected` : "Choose your routine"} onPress={() => router.push({ pathname: "/challenges", params: { editing: "1" } })} />
         <Row icon="volume-mute-outline" title="Silent during missions">
-          <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? false} onValueChange={silentMissions => updateDraft({ silentMissions })} />
+          <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? data.silentMissions ?? true} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>
         <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 14, color: c.muted }}>Pause sound while you solve. Locking your phone brings the sound back.</T>
         <Row icon="refresh-outline" title="Ring again if I drift off" last>

@@ -43,10 +43,12 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.5.1",
     "@types/react": "~19.2.2",
+    "patch-package": "^8.0.1",
     "tsx": "^4.23.13",
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "patch-package --error-on-fail",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

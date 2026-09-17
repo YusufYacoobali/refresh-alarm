@@ -59,6 +59,8 @@ test("a real alarm loops its chosen sound through missions and stops on completi
   // Browsers may require a gesture before the first audible playback.
   if (await retry.isVisible()) await retry.click();
   await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  await expect(page.locator("audio")).toHaveCount(0);
+  await page.getByRole("button", { name: "Turn mission sound on", exact: true }).click();
   const audio = page.locator('audio[data-sound="digital_beep"]');
   await expect(audio).toHaveCount(1);
   await expect.poll(() => audio.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThan(0);

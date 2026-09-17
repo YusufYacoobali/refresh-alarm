@@ -31,7 +31,6 @@ import {
   mathQuestion,
   memoryDeck,
   alarmMissions,
-  challengeNames,
 } from "@/utils/alarms";
 import { art, colors as c, fonts } from "@/theme";
 
@@ -85,7 +84,7 @@ function MissingAlarm() {
 }
 export function Ringing() {
   const { alarm, isPreview, eventId, reminder } = useWakeAlarm();
-  const { finish, snooze, busy } = useApp();
+  const { finish, busy } = useApp();
   const insets = useSafeAreaInsets();
   const acting = useRef(false);
   const [working, setWorking] = useState(false);
@@ -108,18 +107,6 @@ export function Ringing() {
           params: { preview: isPreview ? "1" : "0" },
         });
       }
-    } catch {
-      acting.current = false;
-      setWorking(false);
-    }
-  }
-  async function snoozeAlarm() {
-    if (acting.current || busy) return;
-    acting.current = true;
-    setWorking(true);
-    try {
-      if (!isPreview) await withHapticFeedback(() => snooze(alarm!));
-      goHome();
     } catch {
       acting.current = false;
       setWorking(false);
@@ -201,28 +188,6 @@ export function Ringing() {
             haptic={alarmMissions(alarm).length === 0 ? false : "light"}
             onPress={() => void stop().catch(() => {})}
           />
-          {alarm.snooze > 0 && <Tap
-            disabled={busy || working}
-            haptic={isPreview ? "light" : false}
-            onPress={() => void snoozeAlarm()}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                justifyContent: "center",
-                minHeight: 48,
-              }}
-            >
-              <Icon name="alarm-outline" size={18} color={c.text} />
-              <T variant="label">
-                {isPreview
-                  ? "Close preview"
-                  : `Snooze · ${alarm.snooze} min`}
-              </T>
-            </View>
-          </Tap>}
         </View>
       </View>
     </View>
@@ -308,7 +273,6 @@ function MathGame({
       <Progress value={count} total={3} />
       <Animated.View style={responseStyle}>
       <Card style={{ alignItems: "center", paddingVertical: height < 700 ? 14 : 18, gap: height < 700 ? 8 : 12, borderColor: wrong !== null ? c.danger : c.line }}>
-        <ClayMotion name="math" size={height < 700 ? 80 : 146} />
         <Animated.View style={{ width: "100%" }} key={`question-${count}`} entering={reduced ? undefined : FadeInDown.duration(240)}><T
           testID="math-question"
           numberOfLines={1}
@@ -350,7 +314,7 @@ function MathGame({
     </View>
   );
 }
-function MemoryTile({ tile, revealed, matched }: { tile: number; revealed: boolean; matched: boolean }) {
+function MemoryTile({ tile, revealed, matched, height }: { tile: number; revealed: boolean; matched: boolean; height: number }) {
   const { reduced } = useMotion();
   const flip = useSharedValue(revealed ? 180 : 0);
   const matchStyle = useFeedback(matched ? 1 : 0);
@@ -358,7 +322,7 @@ function MemoryTile({ tile, revealed, matched }: { tile: number; revealed: boole
   const frontStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 850 }, { rotateY: `${flip.get() - 180}deg` }] }));
   const backStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 850 }, { rotateY: `${flip.get()}deg` }] }));
   const surface = { position: "absolute" as const, inset: 0, backfaceVisibility: "hidden" as const, borderRadius: 20, overflow: "hidden" as const, borderWidth: 2 };
-  return <Animated.View style={[{ height: 108 }, matchStyle]}>
+  return <Animated.View style={[{ height }, matchStyle]}>
     <Animated.View style={[surface, { backgroundColor: c.raised, borderColor: c.line, alignItems: "center", justifyContent: "center" }, backStyle]}>
       <Icon name="sparkles-outline" size={30} color={c.lavender} />
     </Animated.View>
@@ -377,6 +341,9 @@ function MemoryGame({
   onDone(): void;
   onActivity(): void;
 }) {
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const tileHeight = Math.min(108, Math.max(60, (height - insets.top - insets.bottom - 270) / 4));
   const [deck] = useState(() => memoryDeck()),
     [open, setOpen] = useState<number[]>([]),
     [matched, setMatched] = useState<number[]>([]),
@@ -425,14 +392,13 @@ function MemoryGame({
     <View style={{ gap: 22 }}>
       <Progress value={matched.length / 2} total={4} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <ClayMotion name="memory" size={95} />
       <T accessibilityLiveRegion="polite" style={{ flex: 1, color: c.muted }}>
         {peek
           ? "Remember the pairs."
           : "Match the pairs."}
       </T>
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 12 }}>
         {deck.map((tile, i) => {
           const revealed = peek || open.includes(i) || matched.includes(i);
           return (
@@ -444,11 +410,11 @@ function MemoryGame({
                   : `Reveal card ${i + 1}`
               }
               onPress={() => flip(i)}
-              style={{ width: "47.8%" }}
+              style={{ width: "48%" }}
               disabled={matched.includes(i)}
               haptic={false}
             >
-              <MemoryTile tile={tile} revealed={revealed} matched={matched.includes(i)} />
+              <MemoryTile tile={tile} revealed={revealed} matched={matched.includes(i)} height={tileHeight} />
             </Tap>
           );
         })}
@@ -475,8 +441,7 @@ function ShakeGame({
     last = useRef(0),
     armed = useRef(true);
   const target = difficulty === "bright" ? 20 : 12;
-  const { width, height } = useWindowDimensions();
-  const { reduced } = useMotion();
+  const { width } = useWindowDimensions();
   const shakeStyle = useFeedback(count);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
@@ -537,7 +502,6 @@ function ShakeGame({
           <T testID="shake-count" accessibilityLabel={`${count} of ${target} shakes`} accessibilityLiveRegion="polite" style={{ fontFamily: fonts.bold, fontSize: Math.min(144, width * .38), lineHeight: Math.min(155, width * .42), fontVariant: ["tabular-nums"], color: c.peach }}>{count}</T>
         </Animated.View>
         <T style={{ color: c.muted, fontSize: 20 }}>of {target} shakes</T>
-        <ClayMotion name="shake" size={height < 700 ? 100 : 140} />
         <T style={{ textAlign: "center", color: c.muted }}>Hold firmly. Shake gently.</T>
       </View>
       <Progress value={count} total={target} label={false} />
@@ -550,15 +514,13 @@ function ShakeGame({
             <Button title="Preview a shake" secondary haptic={false} onPress={register} />
           )}
         </>
-      ) : (
+      ) : status !== "listening" ? (
         <T style={{ textAlign: "center", color: c.muted }}>
-          {status === "listening"
-            ? "Listening for shakes"
-            : status === "ready"
+          {status === "ready"
               ? "Connecting…"
               : "Motion unavailable. Use math instead."}
         </T>
-      )}
+      ) : null}
       <Tap label="Prefer not to shake? Try math instead" onPress={onFallback}>
         <T variant="small" style={{ textAlign: "center", color: c.lavender }}>
           Use math instead
@@ -571,12 +533,12 @@ export function ChallengeScreen() {
   const { height } = useWindowDimensions();
   const { alarm, isPreview, kind, difficulty, eventId } = useWakeAlarm();
   const { activity, error: reminderError } = useMissionReminder(alarm, isPreview, eventId);
-  const { finish, busy } = useApp();
+  const { finish, busy, data, setMissionSilenced } = useApp();
   const inset = useSafeAreaInsets();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
-  const [silent, setSilent] = useState(alarm?.silentMissions ?? false);
+  const silent = alarm?.silentMissions ?? data.silentMissions ?? true;
   const finishing = useRef(false);
   const [working, setWorking] = useState(false);
   const advancing = useRef(false);
@@ -588,10 +550,11 @@ export function ChallengeScreen() {
   const challenge = fallback ? "math" : mission?.kind ?? "none";
   const level = mission?.difficulty ?? "gentle";
   async function complete() {
+    // If a preference is still saving, keep completion available for retry.
+    setCompleted(true);
     if (finishing.current || busy) return;
     finishing.current = true;
     setWorking(true);
-    setCompleted(true);
     try {
       await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
       router.replace({
@@ -614,7 +577,7 @@ export function ChallengeScreen() {
   }
   return (
     <Screen style={{ paddingTop: inset.top + (height < 700 ? 16 : 26), gap: height < 700 ? 16 : 24 }}>
-      <AlarmSound alarm={alarm} preview={isPreview} silent={silent} immediate />
+      <AlarmSound alarm={alarm} preview={isPreview} playPreview silent={silent} immediate />
       <View
         style={{
           flexDirection: "row",
@@ -622,36 +585,25 @@ export function ChallengeScreen() {
           alignItems: "center",
         }}
       >
-        <T variant="eyebrow" style={{ color: c.peach }}>
-          {isPreview ? "PREVIEW" : "WAKE-UP MISSION"}
+        <T variant="heading" style={{ flex: 1 }}>
+          {challenge === "memory" ? "Match the pairs" : challenge === "shake" ? "Shake to wake" : "Solve the math"}
         </T>
+        <Tap label={silent ? "Turn mission sound on" : "Silence mission sound"} selected={!silent} disabled={busy || working}
+          onPress={() => void setMissionSilenced(alarm.id, !silent).catch(() => {})}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 8 }}>
+            <Icon name={silent ? "volume-mute-outline" : "volume-high-outline"} size={20} color={c.lavender} />
+            <T variant="small" style={{ color: c.lavender }}>{silent ? "Off" : "On"}</T>
+          </View>
+        </Tap>
         {isPreview && (
           <Tap label="Close challenge preview" onPress={() => router.canGoBack() ? router.back() : goHome()}>
             <Icon name="close" />
           </Tap>
         )}
       </View>
-      <View style={{ gap: 8 }}>
-        {missions.length > 0 && <View style={{ gap: 10 }}>
-          <T variant="small" accessibilityLiveRegion="polite" style={{ color: c.lavender }}>Mission {missionIndex + 1} of {missions.length} · {challengeNames[challenge]}</T>
-          <View style={{ flexDirection: "row", gap: 6 }}>{missions.map((m, i) => <View key={m.kind} style={{ flex: 1, height: 4, borderRadius: 4, backgroundColor: i < missionIndex ? c.green : i === missionIndex ? c.lavender : c.raised }} />)}</View>
-        </View>}
-        <T variant="title">
-          {challenge === "memory"
-            ? "Match the pairs"
-            : challenge === "shake"
-              ? "Shake to wake"
-              : "Solve the math"}
-        </T>
-      </View>
-      <Tap label={silent ? "Turn mission sound on" : "Silence mission sound"} selected={silent} onPress={() => setSilent(value => !value)}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44 }}>
-          <Icon name={silent ? "volume-mute-outline" : "volume-high-outline"} size={20} color={c.lavender} />
-          <T variant="small" style={{ color: c.lavender }}>{silent ? "Sound off during missions" : "Sound on · tap to silence"}</T>
-        </View>
-      </Tap>
-      {!isPreview && alarm.missionReminder !== false && <T variant="small" style={{ color: reminderError ? c.peach : c.muted, textAlign: "center" }}>
-        {reminderError ? "Couldn’t start the reminder. Keep the alarm sound on." : "No activity for 1 minute? Your alarm will ring again."}
+      {missions.length > 1 && <T variant="small" accessibilityLiveRegion="polite" style={{ color: c.muted }}>Mission {missionIndex + 1} of {missions.length}</T>}
+      {reminderError && <T variant="small" style={{ color: c.peach, textAlign: "center" }}>
+        Couldn’t start the reminder. Keep the alarm sound on.
       </T>}
       {completed || !mission ? (
         <>
@@ -686,13 +638,6 @@ export function ChallengeScreen() {
           onDone={nextMission}
           onActivity={activity}
         />
-      )}
-      {!isPreview && (
-        <Tap disabled={busy || working} haptic={false} onPress={() => void complete().catch(() => {})}>
-          <T variant="small" style={{ color: c.faint, textAlign: "center" }}>
-            I need to stop this alarm
-          </T>
-        </Tap>
       )}
     </Screen>
   );
