@@ -36,13 +36,16 @@ AlarmKit is custom Swift code, so it cannot run inside Expo Go. Use a Mac with X
 ```sh
 npm ci
 npx expo prebuild --platform ios
-npx expo run:ios --device
+npm run ios -- --device
 ```
 
 The install step applies the checked-in `expo-modules-jsi@57.1.0` patch for the
 `RuntimeScheduler` constructor and Swift pointer-capture compiler errors. Keep
 install scripts enabled. For an existing Mac checkout with the earlier workaround,
 follow [iOS build recovery and validation](docs/ios-build.md) before rebuilding.
+**Expo JSI / Xcode compatibility:** `npm install` and `npm ci` run a small postinstall workaround for [Expo's RuntimeScheduler constructor-annotation bug](https://github.com/expo/expo/issues/49214), also [reported on SDK 57](https://github.com/expo/expo/issues/50067). It removes only the invalid Swift ownership annotations from the two constructors in `expo-modules-jsi`, preserving the class's ARC retain/release behavior. The fix also runs before `npm run ios`, survives dependency reinstalls, and does nothing when the header is already fixed. No dependency versions are changed.
+
+For an existing Xcode checkout, run `npm run fix:ios-jsi` from the repository root, then use **Product → Clean Build Folder** and build the `.xcworkspace` again. This manual command is also needed when dependency lifecycle scripts were disabled with `--ignore-scripts`. Do not delete or regenerate your native project just to apply this header fix. Run `npm run test:ios-jsi` to check the workaround independently of the app's other tests.
 
 `modules/daybreak-alarm-kit` is discovered by Expo local-module autolinking. Its podspec weak-links AlarmKit, and all framework usage is availability-guarded for iOS 26. `NSAlarmKitUsageDescription` is configured in `app.json`. Use your own bundle identifier/signing team for a physical device. `eas.json` includes development, preview, and production profiles if you choose EAS Build; no EAS project, account, or signing credentials have been configured.
 
