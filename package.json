@@ -47,12 +47,16 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "node scripts/fix-expo-runtime-scheduler.cjs",
+    "fix:ios-jsi": "node scripts/fix-expo-runtime-scheduler.cjs",
     "start": "expo start",
     "android": "expo run:android",
+    "preios": "node scripts/fix-expo-runtime-scheduler.cjs",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:unit": "tsx --test src/utils/alarms.test.ts plugins/with-refresh-alarm.test.cjs",
+    "test:unit": "tsx --test src/utils/alarms.test.ts plugins/with-refresh-alarm.test.cjs scripts/fix-expo-runtime-scheduler.test.cjs",
+    "test:ios-jsi": "node --test scripts/fix-expo-runtime-scheduler.test.cjs",
     "test:e2e": "playwright test"
   },
   "private": true,
