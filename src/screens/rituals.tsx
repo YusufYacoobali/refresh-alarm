@@ -3,7 +3,6 @@ import { withHapticFeedback } from "@/services/haptics";
 import { View, TextInput, Linking, Platform, AppState } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import { useSceneMotion } from "@/components/motion";
 import { ClayMotion } from "@/components/clay-motion";
@@ -30,8 +29,7 @@ import {
 } from "@/services/scheduler";
 
 export function Sleep() {
-  const inset = useSafeAreaInsets(),
-    { reduced, running } = useSceneMotion();
+  const { reduced, running } = useSceneMotion();
   const [minutes, setMinutes] = useState(5),
     [until, setUntil] = useState<number | null>(null),
     [seconds, setSeconds] = useState(0),
@@ -51,7 +49,7 @@ export function Sleep() {
   const elapsed = minutes * 60 - seconds;
   const inhale = elapsed % 10 < 4;
   return (
-    <Screen style={{ paddingTop: inset.top + 28 }}>
+    <Screen safeTop>
       <T variant="eyebrow" style={{ color: c.lavender }}>
         LET THE DAY SOFTEN
       </T>
@@ -160,14 +158,13 @@ const moods = [
 ] as const;
 export function Journal() {
   const { data, update, busy } = useApp();
-  const inset = useSafeAreaInsets();
   const today = new Date().toLocaleDateString("en-CA");
   const entry = data.journal.find((j) => j.date === today);
   const [mood, setMood] = useState(entry?.mood ?? "Okay"),
     [note, setNote] = useState(entry?.note ?? ""),
     [saved, setSaved] = useState(false);
   return (
-    <Screen style={{ paddingTop: inset.top + 28 }}>
+    <Screen safeTop>
       <T variant="eyebrow" style={{ color: c.peach }}>
         FIND YOUR MORNING RHYTHM
       </T>

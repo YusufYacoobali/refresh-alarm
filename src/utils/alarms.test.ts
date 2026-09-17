@@ -11,6 +11,7 @@ test("mission countdown uses elapsed wall time, including time spent asleep", ()
 });
 import {
   nextOccurrence,
+  nextAlarmAt,
   repeatLabel,
   displayTime,
   validateAlarm,
@@ -32,6 +33,27 @@ const alarm: Alarm = {
   sound: "system",
   snooze: 5,
 };
+
+test("next alarm ignores disabled alarms and passed one-offs", () => {
+  const now = new Date(2026, 8, 18, 8, 0);
+  const monday = new Date(2026, 8, 21, 7, 0);
+  assert.equal(+nextAlarmAt([
+    { ...alarm, enabled: false, hour: 9 },
+    { ...alarm, days: [], nextAt: +now - 60000 },
+    alarm,
+  ], undefined, now)!, +monday);
+  assert.equal(nextAlarmAt([{ ...alarm, enabled: false }], undefined, now), null);
+  assert.equal(nextAlarmAt([], undefined, now), null);
+});
+
+test("next alarm selects the earliest saved one-off or snooze", () => {
+  const now = new Date(2026, 8, 18, 6, 0);
+  const once = { ...alarm, id: "once", days: [], nextAt: +now + 600000 };
+  assert.equal(+nextAlarmAt([alarm, once], undefined, now)!, once.nextAt);
+  assert.equal(+nextAlarmAt([alarm, once], { alarmId: "test", at: +now + 300000 }, now)!, +now + 300000);
+  assert.equal(+nextAlarmAt([alarm, once], { alarmId: "test", at: +now + 1200000 }, now)!, once.nextAt);
+  assert.equal(+nextAlarmAt([alarm, once], { alarmId: "test", at: +now - 1 }, now)!, once.nextAt);
+});
 test("a passed Friday alarm advances to Monday, preserving local wall time", () => {
   const now = new Date(2026, 8, 18, 8, 0);
   const next = nextOccurrence(alarm, now);

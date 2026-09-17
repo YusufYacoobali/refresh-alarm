@@ -197,10 +197,13 @@ export function Screen({
   children,
   style,
   scroll = true,
+  safeTop = false,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   scroll?: boolean;
+  /** Headerless screens own their safe area; native headers already provide it. */
+  safeTop?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
@@ -208,11 +211,15 @@ export function Screen({
     <Animated.ScrollView
       entering={reduced ? undefined : FadeIn.duration(220)}
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentInsetAdjustmentBehavior="automatic"
+      contentInsetAdjustmentBehavior={safeTop ? "never" : "automatic"}
+      automaticallyAdjustContentInsets={!safeTop}
+      automaticallyAdjustsScrollIndicatorInsets={!safeTop}
+      scrollIndicatorInsets={safeTop ? { top: insets.top, bottom: insets.bottom } : undefined}
       automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
         s.screen,
+        safeTop && { paddingTop: insets.top + 12 },
         { paddingBottom: Math.max(insets.bottom, 24) + 16 },
         style,
       ]}
@@ -224,6 +231,7 @@ export function Screen({
     <View
       style={[
         s.screen,
+        safeTop && { paddingTop: insets.top + 12 },
         { flex: 1, paddingBottom: Math.max(insets.bottom, 24) },
         style,
       ]}
@@ -351,7 +359,7 @@ export function BackHome() {
   );
 }
 const s = StyleSheet.create({
-  screen: { padding: 24, gap: 24, backgroundColor: c.bg },
+  screen: { paddingHorizontal: 24, paddingTop: 12, gap: 24, backgroundColor: c.bg },
   card: {
     backgroundColor: c.surface,
     borderRadius: 24,

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { View, Platform } from "react-native";
+import { View, Platform, AppState } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   T,
   Screen,
@@ -19,18 +18,25 @@ import {
 } from "@/components/ui";
 import { AlarmCard } from "@/components/alarm-card";
 import { colors as c, art } from "@/theme";
-import { useApp, newAlarm } from "@/state/app-state";
-import { nextOccurrence, timeUntil } from "@/utils/alarms";
+import { useApp } from "@/state/app-state";
+import { nextOccurrence, nextAlarmAt, timeUntil } from "@/utils/alarms";
 import { Float } from "@/components/motion";
 import { ClayMotion } from "@/components/clay-motion";
-export function Home() {
-  const { data, edit } = useApp(),
-    insets = useSafeAreaInsets();
+function useCurrentTime() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
+    const refresh = () => setNow(new Date());
+    const t = setInterval(refresh, 30000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") refresh();
+    });
+    return () => { clearInterval(t); subscription.remove(); };
   }, []);
+  return now;
+}
+export function Home() {
+  const { data, edit } = useApp();
+  const now = useCurrentTime();
   const alarm = [...data.alarms]
     .filter((a) => a.enabled)
     .sort((a, b) => +nextOccurrence(a, now) - +nextOccurrence(b, now))[0];
@@ -41,7 +47,7 @@ export function Home() {
         ? "Good afternoon"
         : "Good evening";
   return (
-    <Screen style={{ paddingTop: insets.top + 28, gap: 22 }}>
+    <Screen safeTop style={{ gap: 22 }}>
       <View
         style={{
           flexDirection: "row",
@@ -210,16 +216,13 @@ export function Home() {
 export function Alarms() {
   const { saved } = useLocalSearchParams<{ saved?: string }>();
   const { data, edit } = useApp();
-  const insets = useSafeAreaInsets();
+  const now = useCurrentTime();
+  const next = nextAlarmAt(data.alarms, data.snoozed, now);
   return (
-    <Screen style={{ paddingTop: insets.top + 28 }}>
-      {saved && data.alarms.some(a => a.id === saved) && <Card style={{ padding: 16, borderColor: c.green, flexDirection: "row", gap: 10, alignItems: "center" }}><Icon name="checkmark-circle" color={c.green} /><T accessibilityLiveRegion="polite" style={{ flex: 1 }}>Alarm saved. You’re all set.</T><Tap label="Dismiss saved confirmation" onPress={() => router.setParams({ saved: undefined })}><Icon name="close" size={18} /></Tap></Card>}
-      <T variant="eyebrow" style={{ color: c.peach }}>
-        LESS SNOOZE. MORE MORNING.
-      </T>
+    <Screen safeTop style={{ gap: 16 }}>
       <Heading
         title="Your mornings"
-        subtitle={`${data.alarms.filter((a) => a.enabled).length} active · Ready for your next wake-up`}
+        subtitle={next ? `Next alarm in ${timeUntil(next, now)}` : "No upcoming alarms"}
         right={
           <CircleButton
             icon="add"
@@ -231,6 +234,7 @@ export function Alarms() {
           />
         }
       />
+      {saved && data.alarms.some(a => a.id === saved) && <Card style={{ padding: 16, borderColor: c.green, flexDirection: "row", gap: 10, alignItems: "center" }}><Icon name="checkmark-circle" color={c.green} /><T accessibilityLiveRegion="polite" style={{ flex: 1 }}>Alarm saved. You’re all set.</T><Tap label="Dismiss saved confirmation" onPress={() => router.setParams({ saved: undefined })}><Icon name="close" size={18} /></Tap></Card>}
       {data.alarms.length ? (
         data.alarms.map((alarm, i) => <Enter key={alarm.id} delay={Math.min(i * 45, 180)}><AlarmCard alarm={alarm} /></Enter>)
       ) : (
@@ -256,7 +260,6 @@ export function Alarms() {
           />
         </>
       )}
-      <Quote text="A little less snooze. A little more time for you." />
     </Screen>
   );
 }

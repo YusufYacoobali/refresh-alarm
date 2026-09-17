@@ -86,6 +86,19 @@ export function timeUntil(date: Date, now = new Date()) {
   const total = Math.max(1, Math.ceil((+date - +now) / 60000));
   return `${Math.floor(total / 60) ? `${Math.floor(total / 60)}h ` : ""}${total % 60}m`;
 }
+export function nextAlarmAt(
+  alarms: Alarm[],
+  snoozed?: { alarmId: string; at: number },
+  now = new Date(),
+): Date | null {
+  const times = alarms.filter(a => a.enabled).map(a =>
+    // A saved one-off must not appear to repeat tomorrow after it has rung.
+    !a.days.length && a.nextAt !== undefined ? a.nextAt : +nextOccurrence(a, now),
+  );
+  if (snoozed && alarms.some(a => a.id === snoozed.alarmId)) times.push(snoozed.at);
+  const next = Math.min(...times.filter(at => at > +now));
+  return Number.isFinite(next) ? new Date(next) : null;
+}
 export function validateAlarm(a: Alarm) {
   if (
     !Number.isInteger(a.hour) ||

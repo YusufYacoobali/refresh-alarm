@@ -23,10 +23,11 @@ export function AlarmCard({
   return (
     <Card
       style={{
-        padding: 22,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         backgroundColor: featured ? "#25263F" : c.surface,
         borderColor: featured ? "#BDB0F52A" : "#FFFFFF0C",
-        gap: 8,
+        gap: 4,
       }}
     >
       <View
@@ -59,7 +60,7 @@ export function AlarmCard({
               style={{
                 fontFamily: fonts.medium,
                 fontSize: 49,
-                lineHeight: 65,
+                lineHeight: 58,
                 letterSpacing: -1.5,
                 fontVariant: ["tabular-nums"],
               }}

@@ -76,7 +76,7 @@ function usePreventBack() {
 }
 function MissingAlarm() {
   return (
-    <Screen>
+    <Screen safeTop>
       <T variant="heading">This alarm is no longer here.</T>
       <Button title="Back to home" onPress={() => goHome()} />
     </Screen>
@@ -130,7 +130,7 @@ export function Ringing() {
         style={{
           flex: 1,
           paddingHorizontal: 30,
-          paddingTop: insets.top + 50,
+          paddingTop: insets.top + (isPreview ? 44 : 12),
           paddingBottom: Math.max(insets.bottom, 24),
           alignItems: "center",
         }}
@@ -524,7 +524,6 @@ export function ChallengeScreen() {
   const { height } = useWindowDimensions();
   const { alarm, isPreview, kind, difficulty, eventId } = useWakeAlarm();
   const { finish, busy, data, setMissionSilenced } = useApp();
-  const inset = useSafeAreaInsets();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
@@ -567,7 +566,7 @@ export function ChallengeScreen() {
     } else void complete().catch(() => {});
   }
   return (
-    <Screen style={{ paddingTop: inset.top + (height < 700 ? 16 : 26), gap: height < 700 ? 16 : 24 }}>
+    <Screen safeTop style={{ gap: height < 700 ? 16 : 24 }}>
       <AlarmSound alarm={alarm} preview={isPreview} playPreview silent={silent} immediate />
       <View
         style={{
@@ -638,11 +637,10 @@ export function ChallengeScreen() {
 }
 export function Success() {
   const { preview } = useLocalSearchParams<{ preview?: string }>();
-  const inset = useSafeAreaInsets();
   return (
     <Screen
+      safeTop
       style={{
-        paddingTop: inset.top + 24,
         flexGrow: 1,
         justifyContent: "center",
       }}
