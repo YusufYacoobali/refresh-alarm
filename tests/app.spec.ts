@@ -187,9 +187,11 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page
     .getByRole("button", { name: "Edit A lovely morning at 8:35", exact: true })
     .click();
-  await page.getByRole("button", { name: "Delete alarm", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Delete alarm", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await page.getByRole("button", { name: "Delete A lovely morning", exact: true }).click();
   await page
-    .getByRole("button", { name: "Yes, delete alarm", exact: true })
+    .getByRole("button", { name: "Confirm delete A lovely morning", exact: true })
     .click();
   await expect(
     page.getByText("A fresh start awaits.", { exact: true }).last(),

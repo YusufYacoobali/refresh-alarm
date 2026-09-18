@@ -1,5 +1,6 @@
+import { useRef, useState } from "react";
 import { View } from "react-native";
-import { haptic } from "@/services/haptics";
+import { haptic, withHapticFeedback } from "@/services/haptics";
 import { AlarmSwitch } from "./alarm-switch";
 import { router } from "expo-router";
 import { Card, T, Tap, Icon } from "./ui";
@@ -19,7 +20,15 @@ export function AlarmCard({
   alarm: Alarm;
   featured?: boolean;
 }) {
-  const { edit, saveAlarm, busy } = useApp();
+  const { edit, saveAlarm, duplicateAlarm, deleteAlarm, busy } = useApp();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const acting = useRef(false);
+  async function act(action: () => Promise<void>) {
+    if (acting.current || busy) return;
+    acting.current = true;
+    try { await withHapticFeedback(action); } catch { /* Shared error layer offers retry. */ }
+    finally { acting.current = false; }
+  }
   return (
     <Card
       style={{
@@ -44,6 +53,7 @@ export function AlarmCard({
           }}
           label={`Edit ${alarm.label} at ${displayTime(alarm)}`}
           style={{ flex: 1 }}
+          disabled={busy}
         >
           <T variant="small" style={{ color: featured ? c.lavender : c.muted }}>
             {featured ? "YOUR NEXT ALARM" : alarm.label}
@@ -70,7 +80,8 @@ export function AlarmCard({
             <T variant="label">{alarm.hour < 12 ? "AM" : "PM"}</T>
           </View>
         </Tap>
-        <AlarmSwitch
+        <View style={{ alignItems: "flex-end" }}>
+          <AlarmSwitch
           value={alarm.enabled}
           onValueChange={(value) =>
             void saveAlarm({ ...alarm, enabled: value }).catch(() => haptic("error"))
@@ -78,7 +89,22 @@ export function AlarmCard({
           disabled={busy}
           label={`Enable ${alarm.label}`}
           testID={`toggle-${alarm.id}`}
-        />
+          />
+          <View style={{ flexDirection: "row" }}>
+            <Tap label={`Duplicate ${alarm.label}`} disabled={busy} haptic={false}
+              onPress={() => { setConfirmDelete(false); void act(() => duplicateAlarm(alarm)); }}>
+              <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                <Icon name="copy-outline" size={18} color={c.muted} />
+              </View>
+            </Tap>
+            <Tap label={`Delete ${alarm.label}`} disabled={busy} haptic="medium"
+              onPress={() => setConfirmDelete(true)}>
+              <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                <Icon name="trash-outline" size={18} color={c.danger} />
+              </View>
+            </Tap>
+          </View>
+        </View>
       </View>
       <View
         style={{
@@ -106,6 +132,17 @@ export function AlarmCard({
           </T>
         </View>
       </View>
+      {confirmDelete && <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.line, gap: 8 }}>
+        <T variant="small" accessibilityLiveRegion="polite">Delete “{alarm.label}” and cancel its scheduled alarm?</T>
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
+          <Tap label={`Keep ${alarm.label}`} disabled={busy} onPress={() => setConfirmDelete(false)}>
+            <View style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}><T variant="label">Keep alarm</T></View>
+          </Tap>
+          <Tap label={`Confirm delete ${alarm.label}`} disabled={busy} haptic={false} onPress={() => void act(() => deleteAlarm(alarm))}>
+            <View style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}><T variant="label" style={{ color: c.danger }}>Delete</T></View>
+          </Tap>
+        </View>
+      </View>}
     </Card>
   );
 }

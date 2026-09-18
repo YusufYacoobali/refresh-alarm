@@ -41,6 +41,18 @@ export type Alarm = {
   registration?: Registration;
   nextAt?: number;
 };
+export function copyAlarm(alarm: Alarm, id: string, existingLabels: string[]): Alarm {
+  const { registration: _registration, nextAt: _nextAt, ...settings } = alarm;
+  const labels = new Set(existingLabels);
+  let number = 1;
+  let label: string;
+  do {
+    const suffix = number === 1 ? " (copy)" : ` (copy ${number})`;
+    label = `${alarm.label.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
+    number += 1;
+  } while (labels.has(label));
+  return { ...settings, id, label, days: [...alarm.days], missions: alarm.missions?.map(m => ({ ...m })) };
+}
 export const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const challengeNames: Record<Challenge, string> = {
   none: "Simple dismiss",

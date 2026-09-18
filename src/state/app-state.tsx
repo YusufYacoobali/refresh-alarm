@@ -17,6 +17,7 @@ import {
   Registration,
   validateAlarm,
   nextOccurrence,
+  copyAlarm,
 } from "@/utils/alarms";
 import {
   cancelRegistration,
@@ -74,6 +75,7 @@ type Context = {
   edit(alarm?: Alarm): void;
   updateDraft(patch: Partial<Alarm>): void;
   saveAlarm(alarm: Alarm): Promise<void>;
+  duplicateAlarm(alarm: Alarm): Promise<void>;
   deleteAlarm(alarm: Alarm): Promise<void>;
   update(patch: Partial<Data>): Promise<void>;
   setMissionSilenced(alarmId: string | null, silent: boolean): Promise<void>;
@@ -240,6 +242,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw e;
       }
     });
+  const duplicateAlarm = (alarm: Alarm) => saveAlarm(copyAlarm(
+    alarm, Crypto.randomUUID(), current.current.alarms.map(a => a.label),
+  ));
   const deleteAlarm = (alarm: Alarm) =>
     transaction(async () => {
       await cancelRegistration(alarm.registration);
@@ -340,6 +345,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         })),
         addCustomSound: (sound) => transaction(() => persist({ ...current.current, customSounds: [...(current.current.customSounds ?? []), sound] })),
         saveAlarm,
+        duplicateAlarm,
         deleteAlarm,
         finish,
         snooze,

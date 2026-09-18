@@ -1,4 +1,3 @@
-import { goHome } from "@/utils/navigation";
 import { withHapticFeedback } from "@/services/haptics";
 import React, { useEffect, useState } from "react";
 import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-native";
@@ -58,20 +57,18 @@ function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; on
 }
 export function AlarmEditor() {
   const { reduced } = useMotion();
-  const { draft, edit, updateDraft, saveAlarm, deleteAlarm, data, busy, clearError } =
+  const { draft, edit, updateDraft, saveAlarm, data, busy, clearError } =
     useApp();
   const insets = useSafeAreaInsets();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [choosingPhoto, setChoosingPhoto] = useState(false);
-  const [repeatOpen, setRepeatOpen] = useState(false),
-    [confirmDelete, setConfirmDelete] = useState(false);
+  const [repeatOpen, setRepeatOpen] = useState(false);
   const [section, setSection] = useState<"sound" | "missions" | "more" | null>(null);
   const toggleSection = (next: "sound" | "missions" | "more") => setSection(current => current === next ? null : next);
   useEffect(() => {
     if (!draft) edit();
   }, []);
   if (!draft) return null;
-  const exists = data.alarms.some((a) => a.id === draft.id);
   async function chooseWallpaper() {
     if (choosingPhoto) return;
     setChoosingPhoto(true);
@@ -272,31 +269,6 @@ export function AlarmEditor() {
           {draft.sound === "system" ? "Uses your device’s default alarm sound." : `${soundName(draft.sound)} plays when this alarm rings.`}
         </T>
       </View>
-      {exists && (
-        <Tap haptic="medium" onPress={() => setConfirmDelete(!confirmDelete)}>
-          <T variant="small" style={{ color: c.danger, textAlign: "center" }}>
-            Delete alarm
-          </T>
-        </Tap>
-      )}
-      {confirmDelete && (
-        <Card style={{ padding: 18, gap: 12 }}>
-          <T>Delete this alarm and cancel its scheduled wake-up?</T>
-          <Button
-            title="Yes, delete alarm"
-            haptic={false}
-            loading={busy}
-            onPress={() =>
-              void withHapticFeedback(() => deleteAlarm(draft))
-                .then(() => goHome("alarms"))
-                .catch(() => {})
-            }
-          />
-          <Tap onPress={() => setConfirmDelete(false)}>
-            <T style={{ textAlign: "center" }}>Keep alarm</T>
-          </Tap>
-        </Card>
-      )}
     </Screen>
     <View style={{ paddingHorizontal: 24, paddingTop: 14, paddingBottom: Math.max(insets.bottom, 18), gap: 10, backgroundColor: c.bg, borderTopWidth: 1, borderTopColor: c.line }}>
       {saveError && <View accessibilityLiveRegion="assertive" style={{ gap: 8 }}>

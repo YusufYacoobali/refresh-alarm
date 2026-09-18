@@ -9,6 +9,8 @@ const symbols: Partial<Record<IconName, SymbolViewProps["name"]>> = {
   "moon-outline": "moon",
   "home-outline": "house",
   "alarm-outline": "alarm",
+  "copy-outline": "doc.on.doc",
+  "trash-outline": "trash",
   "book-outline": "book.closed",
   add: "plus",
   checkmark: "checkmark",

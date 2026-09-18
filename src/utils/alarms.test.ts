@@ -22,6 +22,7 @@ import {
   missionDescription,
   missionRounds,
   missionSummary,
+  copyAlarm,
 } from "./alarms";
 const alarm: Alarm = {
   id: "test",
@@ -35,6 +36,35 @@ const alarm: Alarm = {
   sound: "system",
   snooze: 5,
 };
+
+test("duplicating an alarm preserves its settings with independent identity and mission data", () => {
+  const original: Alarm = { ...alarm, missions: [{ kind: "memory", difficulty: "bright", rounds: 3 }],
+    wallpaper: "file:///wallpaper.png", volume: .6, silentMissions: true,
+    registration: { kind: "alarmkit", ids: ["native-id"] }, nextAt: 12345 };
+  const copy = copyAlarm(original, "new-id", [original.label]);
+  assert.equal(copy.id, "new-id");
+  assert.equal(copy.label, "Morning (copy)");
+  assert.equal(copy.registration, undefined);
+  assert.equal(copy.nextAt, undefined);
+  assert.equal(copy.wallpaper, original.wallpaper);
+  assert.equal(copy.volume, original.volume);
+  assert.equal(copy.enabled, original.enabled);
+  assert.deepEqual(copy.missions, original.missions);
+  copy.missions![0].rounds = 1;
+  copy.days.push(0);
+  assert.equal(original.missions![0].rounds, 3);
+  assert.deepEqual(original.days, [1, 2, 3, 4, 5]);
+  assert.doesNotThrow(() => validateAlarm(copy));
+});
+
+test("duplicate names are unique and stay within the label length limit", () => {
+  assert.equal(copyAlarm(alarm, "copy-2", ["Morning (copy)"]).label, "Morning (copy 2)");
+  const long = { ...alarm, label: "A".repeat(48), enabled: false };
+  const copy = copyAlarm(long, "copy", []);
+  assert.equal(copy.label.length, 48);
+  assert.equal(copy.enabled, false);
+  assert.doesNotThrow(() => validateAlarm(copy));
+});
 
 test("next alarm ignores disabled alarms and passed one-offs", () => {
   const now = new Date(2026, 8, 18, 8, 0);
