@@ -17,9 +17,10 @@ import {
   SoundArt,
 } from "@/components/ui";
 import { AlarmCard } from "@/components/alarm-card";
+import { ReorderableAlarms } from "@/components/reorderable-alarms";
 import { colors as c, art } from "@/theme";
 import { useApp } from "@/state/app-state";
-import { nextOccurrence, nextAlarmAt, timeUntil } from "@/utils/alarms";
+import { nextOccurrence, nextAlarmAt, timeUntil, orderAlarms } from "@/utils/alarms";
 import { Float } from "@/components/motion";
 import { ClayMotion } from "@/components/clay-motion";
 function useCurrentTime() {
@@ -215,11 +216,12 @@ export function Home() {
 }
 export function Alarms() {
   const { saved } = useLocalSearchParams<{ saved?: string }>();
-  const { data, edit } = useApp();
+  const { data, edit, busy, reorderAlarms } = useApp();
+  const ordered = React.useMemo(() => orderAlarms(data.alarms, data.alarmOrder), [data.alarms, data.alarmOrder]);
   const now = useCurrentTime();
   const next = nextAlarmAt(data.alarms, data.snoozed, now);
   return (
-    <Screen safeTop style={{ gap: 16 }}>
+    <Screen safeTop scroll={data.alarms.length === 0} style={{ gap: 16 }}>
       <Heading
         title="Your mornings"
         subtitle={next ? `Next alarm in ${timeUntil(next, now)}` : "No upcoming alarms"}
@@ -236,7 +238,7 @@ export function Alarms() {
       />
       {saved && data.alarms.some(a => a.id === saved) && <Card style={{ padding: 16, borderColor: c.green, flexDirection: "row", gap: 10, alignItems: "center" }}><Icon name="checkmark-circle" color={c.green} /><T accessibilityLiveRegion="polite" style={{ flex: 1 }}>Alarm saved. You’re all set.</T><Tap label="Dismiss saved confirmation" onPress={() => router.setParams({ saved: undefined })}><Icon name="close" size={18} /></Tap></Card>}
       {data.alarms.length ? (
-        data.alarms.map((alarm, i) => <Enter key={alarm.id} delay={Math.min(i * 45, 180)}><AlarmCard alarm={alarm} /></Enter>)
+        <ReorderableAlarms alarms={ordered} busy={busy} onReorder={reorderAlarms} />
       ) : (
         <>
           <Image

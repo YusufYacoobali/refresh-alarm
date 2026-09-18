@@ -10,6 +10,7 @@ import {
   TextProps,
   ActivityIndicator,
   ColorValue,
+  PressableProps,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -42,6 +43,8 @@ export function Tap({
   disabled,
   selected,
   haptic = true,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   children: React.ReactNode;
   onPress: () => void;
@@ -50,6 +53,8 @@ export function Tap({
   disabled?: boolean;
   selected?: boolean;
   haptic?: boolean | HapticKind;
+  accessibilityActions?: PressableProps["accessibilityActions"];
+  onAccessibilityAction?: PressableProps["onAccessibilityAction"];
 }) {
   const [pressed, setPressed] = useState(false);
   const { reduced } = useMotion();
@@ -57,6 +62,8 @@ export function Tap({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       accessibilityState={{ disabled: !!disabled, selected }}
       aria-disabled={!!disabled}
       aria-pressed={selected}

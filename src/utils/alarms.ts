@@ -41,6 +41,16 @@ export type Alarm = {
   registration?: Registration;
   nextAt?: number;
 };
+/** Manual order takes precedence; new alarms follow it in clock-time order. */
+export function orderAlarms(alarms: Alarm[], order?: string[]): Alarm[] {
+  const ranks = new Map((order ?? []).map((id, index) => [id, index]));
+  return [...alarms].sort((a, b) => {
+    const rankA = ranks.get(a.id), rankB = ranks.get(b.id);
+    if (rankA !== undefined || rankB !== undefined)
+      return (rankA ?? Infinity) - (rankB ?? Infinity);
+    return a.hour * 60 + a.minute - (b.hour * 60 + b.minute);
+  });
+}
 export function copyAlarm(alarm: Alarm, id: string, existingLabels: string[]): Alarm {
   const { registration: _registration, nextAt: _nextAt, ...settings } = alarm;
   const labels = new Set(existingLabels);

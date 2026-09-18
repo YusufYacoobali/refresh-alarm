@@ -17,11 +17,16 @@ import { useApp } from "@/state/app-state";
 export function AlarmCard({
   alarm,
   featured = false,
+  interactionDisabled = false,
+  onMove,
 }: {
   alarm: Alarm;
   featured?: boolean;
+  interactionDisabled?: boolean;
+  onMove?: (direction: number) => void;
 }) {
-  const { edit, saveAlarm, duplicateAlarm, deleteAlarm, busy } = useApp();
+  const { edit, saveAlarm, duplicateAlarm, deleteAlarm, busy: saving } = useApp();
+  const busy = saving || interactionDisabled;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const acting = useRef(false);
   async function act(action: () => Promise<void>) {
@@ -53,6 +58,11 @@ export function AlarmCard({
             router.push("/alarm");
           }}
           label={`Edit ${alarm.label} at ${displayTime(alarm)}`}
+          accessibilityActions={onMove ? [{ name: "moveUp", label: "Move alarm up" }, { name: "moveDown", label: "Move alarm down" }] : undefined}
+          onAccessibilityAction={event => {
+            if (event.nativeEvent.actionName === "moveUp") onMove?.(-1);
+            if (event.nativeEvent.actionName === "moveDown") onMove?.(1);
+          }}
           style={{ flex: 1 }}
           disabled={busy}
         >

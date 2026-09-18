@@ -23,6 +23,7 @@ import {
   missionRounds,
   missionSummary,
   copyAlarm,
+  orderAlarms,
 } from "./alarms";
 const alarm: Alarm = {
   id: "test",
@@ -36,6 +37,20 @@ const alarm: Alarm = {
   sound: "system",
   snooze: 5,
 };
+
+test("alarm ordering defaults to clock time and preserves ties without mutating records", () => {
+  const input = [{ ...alarm, id: "evening", hour: 19 }, { ...alarm, id: "later", minute: 30 },
+    { ...alarm, id: "morning", enabled: false }, { ...alarm, id: "same" }, { ...alarm, id: "midnight", hour: 0 }];
+  assert.deepEqual(orderAlarms(input).map(a => a.id), ["midnight", "morning", "same", "later", "evening"]);
+  assert.equal(input[0].id, "evening");
+  assert.equal(orderAlarms(input)[1], input[2]);
+});
+
+test("manual ordering tolerates deleted alarms and appends new alarms by time", () => {
+  const input = [{ ...alarm, id: "one" }, { ...alarm, id: "two", hour: 8 },
+    { ...alarm, id: "new-late", hour: 23 }, { ...alarm, id: "new-early", hour: 1 }];
+  assert.deepEqual(orderAlarms(input, ["two", "deleted", "one"]).map(a => a.id), ["two", "one", "new-early", "new-late"]);
+});
 
 test("duplicating an alarm preserves its settings with independent identity and mission data", () => {
   const original: Alarm = { ...alarm, missions: [{ kind: "memory", difficulty: "bright", rounds: 3 }],

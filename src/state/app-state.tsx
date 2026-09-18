@@ -18,6 +18,7 @@ import {
   validateAlarm,
   nextOccurrence,
   copyAlarm,
+  orderAlarms,
 } from "@/utils/alarms";
 import {
   cancelRegistration,
@@ -30,6 +31,7 @@ type Data = {
   version: 1;
   onboarded: boolean;
   alarms: Alarm[];
+  alarmOrder?: string[];
   theme: "serene" | "moonlight" | "ocean";
   journal: JournalEntry[];
   completions: string[];
@@ -77,6 +79,7 @@ type Context = {
   saveAlarm(alarm: Alarm): Promise<void>;
   duplicateAlarm(alarm: Alarm): Promise<void>;
   deleteAlarm(alarm: Alarm): Promise<void>;
+  reorderAlarms(ids: string[]): Promise<void>;
   update(patch: Partial<Data>): Promise<void>;
   setMissionSilenced(alarmId: string | null, silent: boolean): Promise<void>;
   addCustomSound(sound: CustomSound): Promise<void>;
@@ -107,6 +110,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         )
           throw new Error("Saved data could not be read.");
         parsed.alarms.forEach(validateAlarm);
+        if (parsed.alarmOrder && (!Array.isArray(parsed.alarmOrder) || parsed.alarmOrder.some(id => typeof id !== "string")))
+          throw new Error("Saved alarm order could not be read.");
         if (parsed.customSounds && !Array.isArray(parsed.customSounds)) throw new Error("Saved sounds could not be read.");
         setCustomSounds(parsed.customSounds ?? []);
         current.current = parsed;
@@ -245,6 +250,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const duplicateAlarm = (alarm: Alarm) => saveAlarm(copyAlarm(
     alarm, Crypto.randomUUID(), current.current.alarms.map(a => a.label),
   ));
+  const reorderAlarms = (ids: string[]) => transaction(() => persist({
+    ...current.current,
+    // Resolve against current records so a stale gesture cannot drop an alarm.
+    alarmOrder: orderAlarms(current.current.alarms, [...new Set(ids)]).map(a => a.id),
+  }));
   const deleteAlarm = (alarm: Alarm) =>
     transaction(async () => {
       await cancelRegistration(alarm.registration);
@@ -254,6 +264,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await persist({
           ...current.current,
           alarms: current.current.alarms.filter((a) => a.id !== alarm.id),
+          alarmOrder: current.current.alarmOrder?.filter(id => id !== alarm.id),
           snoozed:
             current.current.snoozed?.alarmId === alarm.id
               ? undefined
@@ -347,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveAlarm,
         duplicateAlarm,
         deleteAlarm,
+        reorderAlarms,
         finish,
         snooze,
       }}
