@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -198,17 +198,22 @@ export function Screen({
   style,
   scroll = true,
   safeTop = false,
+  scrollResetKey,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   scroll?: boolean;
   /** Headerless screens own their safe area; native headers already provide it. */
   safeTop?: boolean;
+  scrollResetKey?: number | string;
 }) {
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [scrollResetKey]);
   return scroll ? (
     <Animated.ScrollView
+      ref={scrollRef}
       entering={reduced ? undefined : FadeIn.duration(220)}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentInsetAdjustmentBehavior={safeTop ? "never" : "automatic"}

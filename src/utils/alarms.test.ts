@@ -20,6 +20,8 @@ import {
   Alarm,
   alarmMissions,
   missionDescription,
+  missionRounds,
+  missionSummary,
 } from "./alarms";
 const alarm: Alarm = {
   id: "test",
@@ -124,6 +126,36 @@ test("mission validation rejects duplicates, invalid difficulty, and unknown kin
   assert.throws(() => validateAlarm({ ...alarm, snooze: -1 }));
   assert.equal(missionDescription("shake", "bright"), "20 separate shakes");
   assert.equal(missionDescription("memory", "gentle"), "4 pairs · 2-second preview");
+});
+
+test("supplication can be saved alone, in legacy format, or with all other missions", () => {
+  const supplication = { kind: "supplication" as const, difficulty: "gentle" as const };
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, challenge: "supplication", missions: [supplication] }));
+  assert.deepEqual(alarmMissions({ ...alarm, challenge: "supplication" }), [supplication]);
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, missions: [
+    supplication,
+    { kind: "math", difficulty: "gentle" },
+    { kind: "memory", difficulty: "bright" },
+    { kind: "shake", difficulty: "gentle" },
+  ] }));
+  assert.throws(() => validateAlarm({ ...alarm, missions: [supplication, supplication] }));
+  assert.equal(missionDescription("supplication", "gentle"), missionDescription("supplication", "bright"));
+});
+
+test("mission rounds default to one and persist independently in summaries", () => {
+  assert.equal(missionRounds(), 1);
+  assert.equal(missionRounds({}), 1);
+  assert.equal(missionRounds({ rounds: 3 }), 3);
+  const missions = [
+    { kind: "memory" as const, difficulty: "gentle" as const, rounds: 3 },
+    { kind: "math" as const, difficulty: "bright" as const, rounds: 2 },
+  ];
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, missions }));
+  assert.equal(missionSummary({ ...alarm, missions }), "Memory match · 3 rounds → Math puzzle · 2 rounds");
+  for (const rounds of [0, -1, 1.5, 11, NaN, Infinity, null, "3"]) {
+    assert.throws(() => validateAlarm({ ...alarm, missions: [{ ...missions[0], rounds }] } as Alarm));
+  }
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, missions: [{ ...missions[0], rounds: 10 }] }));
 });
 
 test("alarm volume, gradual volume and reminder validate without breaking older alarms", () => {

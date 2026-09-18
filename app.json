@@ -5,7 +5,7 @@
     "scheme": "daybreak",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/art/moon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
@@ -26,7 +26,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/art/moon.png",
+      "favicon": "./assets/icon.png",
       "bundler": "metro"
     },
     "plugins": [

@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, BackHandler, AppState, useWindowDimensions } from "react-native";
 import { AlarmSound } from "@/components/alarm-sound";
 import { useMissionReminder } from "@/components/use-mission-reminder";
+import { SupplicationMission } from "@/components/supplication-mission";
+import { supplications } from "@/utils/supplications";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
@@ -31,6 +33,8 @@ import {
   mathQuestion,
   memoryDeck,
   alarmMissions,
+  missionRounds,
+  Mission,
 } from "@/utils/alarms";
 import { art, colors as c, fonts } from "@/theme";
 
@@ -54,6 +58,7 @@ function useWakeAlarm() {
     preview?: string;
     kind?: Challenge;
     difficulty?: "gentle" | "bright";
+    rounds?: string;
   }>();
   const { data } = useApp();
   return {
@@ -83,7 +88,7 @@ function MissingAlarm() {
   );
 }
 export function Ringing() {
-  const { alarm, isPreview, eventId, reminder } = useWakeAlarm();
+  const { alarm, isPreview, eventId, reminder, kind, difficulty, rounds } = useWakeAlarm();
   const { finish, busy } = useApp();
   const insets = useSafeAreaInsets();
   const acting = useRef(false);
@@ -98,7 +103,7 @@ export function Ringing() {
       if (alarmMissions(alarm!).length)
         router.replace({
           pathname: "/challenge",
-          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId },
+          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, ...(isPreview ? { kind, difficulty, rounds } : {}) },
         });
       else {
         await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
@@ -522,21 +527,25 @@ function ShakeGame({
 }
 export function ChallengeScreen() {
   const { height } = useWindowDimensions();
-  const { alarm, isPreview, kind, difficulty, eventId } = useWakeAlarm();
+  const { alarm, isPreview, kind, difficulty, rounds, eventId } = useWakeAlarm();
   const { finish, busy, data, setMissionSilenced } = useApp();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
-  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, missionIndex, completed);
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [duaIndex, setDuaIndex] = useState(0);
+  const step = `${missionIndex}:${roundIndex}:${duaIndex}`;
+  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds });
   const silent = alarm?.silentMissions ?? data.silentMissions ?? true;
   const finishing = useRef(false);
   const [working, setWorking] = useState(false);
   const advancing = useRef(false);
-  useEffect(() => { advancing.current = false; }, [missionIndex]);
+  useEffect(() => { advancing.current = false; }, [missionIndex, roundIndex]);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
-  const missions = isPreview && kind && kind !== "none" ? [{ kind, difficulty: difficulty ?? alarm.difficulty }] : alarmMissions(alarm);
+  const missions: Mission[] = isPreview && kind && kind !== "none" ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ rounds: Number(rounds) }) }] : alarmMissions(alarm);
   const mission = missions[missionIndex];
+  const totalRounds = missionRounds(mission);
   const challenge = fallback ? "math" : mission?.kind ?? "none";
   const level = mission?.difficulty ?? "gentle";
   async function complete() {
@@ -556,17 +565,23 @@ export function ChallengeScreen() {
       setWorking(false);
     }
   }
-  function nextMission() {
+  function nextRound() {
     if (advancing.current || isExpired()) return;
     advancing.current = true;
-    if (missionIndex + 1 < missions.length) {
+    if (roundIndex + 1 < totalRounds) {
+      haptic("success");
+      setRoundIndex(i => i + 1);
+      setDuaIndex(0);
+    } else if (missionIndex + 1 < missions.length) {
       haptic("success");
       setMissionIndex(i => i + 1);
+      setRoundIndex(0);
+      setDuaIndex(0);
       setFallback(false);
     } else void complete().catch(() => {});
   }
   return (
-    <Screen safeTop style={{ gap: height < 700 ? 16 : 24 }}>
+    <Screen scrollResetKey={step} safeTop style={{ gap: height < 700 ? 16 : 24 }}>
       <AlarmSound alarm={alarm} preview={isPreview} playPreview silent={silent} immediate />
       <View
         style={{
@@ -576,7 +591,7 @@ export function ChallengeScreen() {
         }}
       >
         <T variant="heading" style={{ flex: 1 }}>
-          {challenge === "memory" ? "Match the pairs" : challenge === "shake" ? "Shake to wake" : "Solve the math"}
+          {challenge === "supplication" ? "Morning duas" : challenge === "memory" ? "Match the pairs" : challenge === "shake" ? "Shake to wake" : "Solve the math"}
         </T>
         <Tap label={silent ? "Turn mission sound on" : "Silence mission sound"} selected={!silent} disabled={busy || working}
           onPress={() => void setMissionSilenced(alarm.id, !silent).catch(() => {})}>
@@ -592,7 +607,10 @@ export function ChallengeScreen() {
         )}
       </View>
       {!completed && <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <T variant="small" style={{ color: c.muted }}>Mission {missionIndex + 1} of {missions.length}</T>
+        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <T variant="small" style={{ color: c.muted }}>Mission {missionIndex + 1} of {missions.length}</T>
+          {totalRounds > 1 && <T testID="mission-round" variant="small" style={{ color: c.lavender }}>Round {roundIndex + 1} of {totalRounds}</T>}
+        </View>
         <T testID="mission-timer" accessibilityLabel={`${secondsLeft} seconds remaining`} variant="label"
           style={{ color: secondsLeft <= 10 ? c.peach : c.lavender, fontVariant: ["tabular-nums"] }}>
           {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
@@ -611,25 +629,37 @@ export function ChallengeScreen() {
             onPress={() => void complete().catch(() => {})}
           />
         </>
+      ) : challenge === "supplication" ? (
+        <SupplicationMission
+          key={`supplication-${step}`}
+          dua={supplications[duaIndex]}
+          index={duaIndex}
+          isExpired={isExpired}
+          onDone={() => {
+            if (isExpired()) return;
+            if (duaIndex + 1 < supplications.length) setDuaIndex(i => i + 1);
+            else nextRound();
+          }}
+        />
       ) : challenge === "memory" ? (
         <MemoryGame
-          key={`memory-${missionIndex}`}
+          key={`memory-${missionIndex}-${roundIndex}`}
           difficulty={level}
-          onDone={nextMission}
+          onDone={nextRound}
         />
       ) : challenge === "shake" ? (
         <ShakeGame
-          key={`shake-${missionIndex}`}
+          key={`shake-${missionIndex}-${roundIndex}`}
           difficulty={level}
           isPreview={isPreview}
           onFallback={() => setFallback(true)}
-          onDone={nextMission}
+          onDone={nextRound}
         />
       ) : (
         <MathGame
-          key={`math-${missionIndex}-${fallback}`}
+          key={`math-${missionIndex}-${roundIndex}-${fallback}`}
           difficulty={level}
-          onDone={nextMission}
+          onDone={nextRound}
         />
       )}
     </Screen>

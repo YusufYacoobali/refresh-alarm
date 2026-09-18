@@ -8,8 +8,8 @@ import {
   Alarm,
   displayTime,
   repeatLabel,
-  challengeNames,
   alarmMissions,
+  missionLabel,
 } from "@/utils/alarms";
 import { useApp } from "@/state/app-state";
 export function AlarmCard({
@@ -102,7 +102,7 @@ export function AlarmCard({
             color={c.lavender}
           />
           <T variant="small" style={{ color: c.lavender, fontSize: 10 }}>
-            {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? challengeNames[alarmMissions(alarm)[0].kind] : "No missions"}
+            {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
           </T>
         </View>
       </View>

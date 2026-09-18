@@ -251,6 +251,7 @@ function AppContent() {
 }
 export default function Layout() {
   const [loaded, fontError] = useFonts({
+    AmiriQuran: require("../../assets/fonts/AmiriQuran-Regular.ttf"),
     NunitoRegular: Nunito_400Regular,
     NunitoSemiBold: Nunito_600SemiBold,
     NunitoBold: Nunito_700Bold,

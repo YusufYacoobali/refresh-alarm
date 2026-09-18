@@ -4,6 +4,7 @@ import { useSoundPlayer } from "@/components/use-sound-player";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptic, withHapticFeedback } from "@/services/haptics";
 import React, { useState } from "react";
+import { Host, Picker } from "@expo/ui";
 import { View, Platform, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,7 +22,7 @@ import {
   IconName,
 } from "@/components/ui";
 import { useApp } from "@/state/app-state";
-import { Mission, alarmMissions, missionDescription, sounds, SoundId } from "@/utils/alarms";
+import { Mission, alarmMissions, missionDescription, missionLabel, missionRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
 
@@ -86,6 +87,7 @@ const challenges: { id: Mission["kind"]; name: string; subtitle: string }[] = [
   { id: "math", name: "Math puzzle", subtitle: "Get your brain into gear." },
   { id: "memory", name: "Memory match", subtitle: "A little focus before the day begins." },
   { id: "shake", name: "Shake to wake", subtitle: "Get moving. Get your morning going." },
+  { id: "supplication", name: "Islamic supplication", subtitle: "Three duas, one at a time." },
 ];
 export function Challenges() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
@@ -96,10 +98,10 @@ export function Challenges() {
     if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
   }
   return <Screen style={{ gap: 22 }}>
-    <Heading title="Get past snooze" subtitle="Build a wake-up that gets you going. Choose your missions and difficulty." />
+    <Heading title="Get past snooze" subtitle="Choose your missions, difficulty, and rounds." />
     <Card style={{ padding: 16, gap: 8 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>{selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
-      <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${challenges.find(c => c.id === m.kind)!.name}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
+      <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
     </Card>
     {challenges.map(item => {
       const index = selected.findIndex(m => m.kind === item.id);
@@ -107,7 +109,7 @@ export function Challenges() {
       return <Card key={item.id} style={{ borderColor: mission ? c.lavender : c.line }}>
         <Tap label={item.name} selected={!!mission} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}>
-            <ClayMotion name={item.id} size={88} />
+            {item.id === "supplication" ? <View style={{ width: 88, height: 88, alignItems: "center", justifyContent: "center" }}><Icon name="book-outline" size={40} color={c.peach} /></View> : <ClayMotion name={item.id} size={88} />}
             <View style={{ flex: 1, gap: 4 }}><T variant="label">{item.name}</T><T variant="small" style={{ color: c.muted }}>{item.subtitle}</T></View>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: mission ? c.lavender : c.raised, alignItems: "center", justifyContent: "center" }}>
               {mission ? <T variant="label" style={{ color: c.ink }}>{index + 1}</T> : <Icon name="add" size={18} />}
@@ -115,14 +117,29 @@ export function Challenges() {
           </View>
         </Tap>
         {mission && <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 12 }}>
+          {item.id !== "supplication" && <>
           <T variant="eyebrow" style={{ color: c.muted }}>DIFFICULTY</T>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {(["gentle", "bright"] as const).map(level => <Tap key={level} label={`${item.name} ${level === "gentle" ? "Easy" : "Hard"}`} selected={mission.difficulty === level} style={{ flex: 1 }} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, difficulty: level } : m))}>
               <View style={{ padding: 12, borderRadius: 16, backgroundColor: mission.difficulty === level ? c.lavender : c.raised, alignItems: "center" }}><T variant="label" style={{ color: mission.difficulty === level ? c.ink : c.muted }}>{level === "gentle" ? "Easy" : "Hard"}</T></View>
             </Tap>)}
           </View>
-          <T variant="small" style={{ color: c.peach }}>{missionDescription(item.id, mission.difficulty)}</T>
-          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty } })}>
+          </>}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <T variant="label">Rounds</T>
+            <Host matchContents colorScheme="dark" seedColor={c.lavender} accessibilityLabel={`${item.name} rounds`}>
+              <Picker selectedValue={missionRounds(mission)} testID={`rounds-${item.id}`}
+                onValueChange={(rounds) => {
+                  haptic("selection");
+                  change(selected.map(m => m.kind === item.id ? { ...m, rounds } : m));
+                }}>
+                {Array.from({ length: MAX_MISSION_ROUNDS }, (_, i) => i + 1).map(rounds =>
+                  <Picker.Item key={rounds} value={rounds} label={`${rounds} round${rounds === 1 ? "" : "s"}`} />)}
+              </Picker>
+            </Host>
+          </View>
+          <T variant="small" style={{ color: c.peach }}>Per round: {missionDescription(item.id, mission.difficulty)}</T>
+          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: String(missionRounds(mission)) } })}>
             <T variant="small" style={{ color: c.lavender }}>Try this mission →</T>
           </Tap>
         </View>}

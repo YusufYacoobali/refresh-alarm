@@ -2,8 +2,18 @@ import { sounds, soundName, validSound } from "./sounds";
 import type { SoundId } from "./sounds";
 export { sounds, soundName };
 export type { SoundId };
-export type Challenge = "none" | "math" | "memory" | "shake";
-export type Mission = { kind: Exclude<Challenge, "none">; difficulty: "gentle" | "bright" };
+export type Challenge = "none" | "math" | "memory" | "shake" | "supplication";
+export type Mission = {
+  kind: Exclude<Challenge, "none">;
+  difficulty: "gentle" | "bright";
+  /** Older saved missions play one round. */
+  rounds?: number;
+};
+export const MAX_MISSION_ROUNDS = 10;
+export function missionRounds(mission?: Pick<Mission, "rounds">) {
+  const rounds = mission?.rounds ?? 1;
+  return Number.isInteger(rounds) && rounds >= 1 && rounds <= MAX_MISSION_ROUNDS ? rounds : 1;
+}
 export type Registration = {
   kind: "alarmkit" | "android" | "notifications" | "preview";
   ids: string[];
@@ -37,15 +47,21 @@ export const challengeNames: Record<Challenge, string> = {
   math: "Math puzzle",
   memory: "Memory match",
   shake: "Shake to wake",
+  supplication: "Islamic supplication",
 };
 export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">): Mission[] {
   return alarm.missions ?? (alarm.challenge === "none" ? [] : [{ kind: alarm.challenge, difficulty: alarm.difficulty }]);
 }
 export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">) {
   const missions = alarmMissions(alarm);
-  return missions.length ? missions.map(m => challengeNames[m.kind]).join(" → ") : "No missions";
+  return missions.length ? missions.map(missionLabel).join(" → ") : "No missions";
+}
+export function missionLabel(mission: Mission) {
+  const rounds = missionRounds(mission);
+  return `${challengeNames[mission.kind]}${rounds > 1 ? ` · ${rounds} rounds` : ""}`;
 }
 export function missionDescription(kind: Mission["kind"], difficulty: Mission["difficulty"]) {
+  if (kind === "supplication") return "3 duas · Recite once, then 3 times each";
   const hard = difficulty === "bright";
   if (kind === "math") return hard ? "3 multiplication questions" : "3 addition questions";
   if (kind === "memory") return hard ? "4 pairs · 0.8-second preview" : "4 pairs · 2-second preview";
@@ -116,17 +132,18 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose valid repeat days.");
   if (!a.label.trim() || a.label.length > 48)
     throw new Error("Give your alarm a name (up to 48 characters).");
-  if (!["none", "math", "memory", "shake"].includes(a.challenge))
+  if (!["none", "math", "memory", "shake", "supplication"].includes(a.challenge))
     throw new Error("Choose a wake-up challenge.");
   if (
     !["gentle", "bright"].includes(a.difficulty) ||
     ![0, 5, 10, 15].includes(a.snooze)
   )
     throw new Error("Choose valid challenge and snooze settings.");
-  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 3 ||
-    a.missions.some(m => !m || !["math", "memory", "shake"].includes(m.kind) || !["gentle", "bright"].includes(m.difficulty)) ||
+  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 4 ||
+    a.missions.some(m => !m || !["math", "memory", "shake", "supplication"].includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+      (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))) ||
     new Set(a.missions.map(m => m.kind)).size !== a.missions.length))
-    throw new Error("Choose each mission once and set its difficulty.");
+    throw new Error(`Choose each mission once, with a valid difficulty and 1–${MAX_MISSION_ROUNDS} rounds.`);
   if (!validSound(a.sound))
     throw new Error("Choose a valid sound preference.");
   if (a.silentMissions !== undefined && typeof a.silentMissions !== "boolean")

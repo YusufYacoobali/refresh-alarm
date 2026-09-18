@@ -29,6 +29,7 @@ export const space = {
 };
 export const radius = { sm: 12, md: 20, lg: 28, full: 999 };
 export const fonts = {
+  arabic: "AmiriQuran",
   regular: "NunitoRegular",
   medium: "NunitoSemiBold",
   bold: "NunitoBold",
