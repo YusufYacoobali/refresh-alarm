@@ -11,6 +11,8 @@ const symbols: Partial<Record<IconName, SymbolViewProps["name"]>> = {
   "alarm-outline": "alarm",
   "copy-outline": "doc.on.doc",
   "trash-outline": "trash",
+  "ellipsis-horizontal": "ellipsis",
+  "ellipsis-vertical": "ellipsis",
   "book-outline": "book.closed",
   add: "plus",
   checkmark: "checkmark",
@@ -52,7 +54,7 @@ export function Icon({
       name={symbols[name] ?? "circle"}
       size={size}
       tintColor={color}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, ...(name === "ellipsis-vertical" ? { transform: [{ rotate: "90deg" }] } : {}) }}
       accessible={false}
     />
   );

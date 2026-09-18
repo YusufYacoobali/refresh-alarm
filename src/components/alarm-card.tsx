@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { View } from "react-native";
 import { haptic, withHapticFeedback } from "@/services/haptics";
 import { AlarmSwitch } from "./alarm-switch";
+import { AlarmActionsMenu } from "./alarm-actions-menu";
 import { router } from "expo-router";
 import { Card, T, Tap, Icon } from "./ui";
 import { colors as c, fonts } from "@/theme";
@@ -80,8 +81,7 @@ export function AlarmCard({
             <T variant="label">{alarm.hour < 12 ? "AM" : "PM"}</T>
           </View>
         </Tap>
-        <View style={{ alignItems: "flex-end" }}>
-          <AlarmSwitch
+        <AlarmSwitch
           value={alarm.enabled}
           onValueChange={(value) =>
             void saveAlarm({ ...alarm, enabled: value }).catch(() => haptic("error"))
@@ -89,22 +89,7 @@ export function AlarmCard({
           disabled={busy}
           label={`Enable ${alarm.label}`}
           testID={`toggle-${alarm.id}`}
-          />
-          <View style={{ flexDirection: "row" }}>
-            <Tap label={`Duplicate ${alarm.label}`} disabled={busy} haptic={false}
-              onPress={() => { setConfirmDelete(false); void act(() => duplicateAlarm(alarm)); }}>
-              <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-                <Icon name="copy-outline" size={18} color={c.muted} />
-              </View>
-            </Tap>
-            <Tap label={`Delete ${alarm.label}`} disabled={busy} haptic="medium"
-              onPress={() => setConfirmDelete(true)}>
-              <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-                <Icon name="trash-outline" size={18} color={c.danger} />
-              </View>
-            </Tap>
-          </View>
-        </View>
+        />
       </View>
       <View
         style={{
@@ -130,6 +115,9 @@ export function AlarmCard({
           <T variant="small" style={{ color: c.lavender, fontSize: 10 }}>
             {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
           </T>
+          <AlarmActionsMenu label={alarm.label} disabled={busy}
+            onDuplicate={() => { setConfirmDelete(false); void act(() => duplicateAlarm(alarm)); }}
+            onDelete={() => { haptic("medium"); setConfirmDelete(true); }} />
         </View>
       </View>
       {confirmDelete && <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.line, gap: 8 }}>

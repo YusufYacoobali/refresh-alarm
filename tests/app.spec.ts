@@ -189,7 +189,8 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
     .click();
   await expect(page.getByRole("button", { name: "Delete alarm", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
-  await page.getByRole("button", { name: "Delete A lovely morning", exact: true }).click();
+  await page.getByRole("button", { name: "More options for A lovely morning", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete A lovely morning", exact: true }).click();
   await page
     .getByRole("button", { name: "Confirm delete A lovely morning", exact: true })
     .click();
