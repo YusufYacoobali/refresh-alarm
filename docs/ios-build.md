@@ -74,6 +74,17 @@ JavaScript export do not prove Swift compilation or system alarm delivery.
 The repair was prepared on Windows; Xcode builds and physical-device checks
 remain required on a Mac/iPhone.
 
+## Late iPhone alarm investigation — 23 September 2026
+
+The reported 07:20 alarm first sounding at 07:28 was on **iOS**, not Android. Its exact cause is not reproduced or confirmed fixed. The JS scheduler passes the selected hour/minute directly to AlarmKit; a mocked-native regression now checks 07:20 explicitly.
+
+- Defer the foreground audio handoff while iOS is inactive/backgrounded, including rechecking after asynchronous reminder cleanup. The system alarm must not be stopped merely because its state event reached JS behind the lock screen.
+- On iOS 26+, refuse to enable a new alarm if the AlarmKit bridge is unavailable instead of silently registering an ordinary notification. Earlier iOS versions retain the notification fallback, now marked `timeSensitive` with its entitlement. Notification settings can still override time-sensitive delivery; see [Apple's delivery documentation](https://developer.apple.com/documentation/usernotifications/unnotificationinterruptionlevel/timesensitive) and [Expo SDK 57 notifications](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/).
+- Native Console category `AlarmTiming` records accepted schedules (hour, minute, timezone and fixed timestamp), observed alert-state updates, and app-requested stops. These are observation timestamps, not proof of the exact moment audio became audible; observation may resume late if the app was suspended.
+- Rebuild iOS to include the timing logs, time-sensitive entitlement and trimmed bundled adhan excerpts. On the affected iPhone, save an alarm a few minutes ahead and verify locked, Silent/Focus, foreground, and cold-launch cases against a second clock. Record iOS version, whether the system alert appeared on time, and whether the app was opened at 07:28. No artificial eight-minute offset has been introduced or removed.
+
+The five new mocked-native tests cover scheduling, bridge availability, fallback priority and inactive/background handoff ordering. They do not replace an Xcode build or physical-device delivery test.
+
 Validation on September 17, 2026: TypeScript passed; all 16 existing unit tests
 passed; Expo Doctor passed 21/21 checks; SDK dependencies were aligned; Apple
 autolinking found `DaybreakAlarmKitModule`; the iOS export bundled 1,953 modules.

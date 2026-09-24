@@ -26,8 +26,8 @@ class AlarmRingService : Service() {
       // Reject late JS mute requests after the screen has locked/backgrounded.
       running?.takeIf { it.eventId == eventId }?.silence(silent && appVisible)
     }
-    fun missionActivity(eventId: String) {
-      running?.takeIf { it.eventId == eventId && appVisible }?.touchMission()
+    fun missionActivity(eventId: String, limitMs: Long = AlarmPlaybackPolicy.MISSION_IDLE_MS) {
+      running?.takeIf { it.eventId == eventId && appVisible }?.touchMission(limitMs)
     }
     fun ensureChannel(context: android.content.Context) {
       if (Build.VERSION.SDK_INT >= 26) context.getSystemService(NotificationManager::class.java).createNotificationChannel(
@@ -67,8 +67,8 @@ class AlarmRingService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     // A replayed start command must not resurrect an already dismissed alarm.
     val alarm = AlarmStore.active(this)
-    if (alarm == null) { stopSelf(); return START_NOT_STICKY }
-    if (eventId == alarm.getString("eventId")) return START_STICKY
+    if (alarm == null) { AlarmHandoff.release(); stopSelf(); return START_NOT_STICKY }
+    if (eventId == alarm.getString("eventId")) { AlarmHandoff.release(); return START_STICKY }
     eventId = alarm.getString("eventId")
     running = this
     silent = false
@@ -106,6 +106,8 @@ class AlarmRingService : Service() {
     startForeground(7301, notification)
     if (wakeLock == null) wakeLock = getSystemService(PowerManager::class.java)
       .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Refresh:alarm").apply { acquire(60 * 60 * 1000L) }
+    AlarmHandoff.release()
+    android.util.Log.i("RefreshAlarm", "serviceStartedAt=${System.currentTimeMillis()} receivedAt=${alarm.optLong("receivedAt")}")
     if (Build.VERSION.SDK_INT >= 26) {
       focus?.let { audioManager.abandonAudioFocusRequest(it) }
       focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
@@ -140,12 +142,12 @@ class AlarmRingService : Service() {
     val gain = if (silent) 0f else AlarmPlaybackPolicy.gain(SystemClock.elapsedRealtime() - ringStarted, rampSeconds)
     runCatching { player?.setVolume(gain, gain) }
   }
-  private fun touchMission() {
+  private fun touchMission(limitMs: Long) {
     val active = AlarmStore.active(this) ?: return
     if (active.optString("eventId") != eventId) return
     // JS calls this once per mission, never for individual answers or shakes.
     if (AlarmPlaybackPolicy.expired(missionDeadline, SystemClock.elapsedRealtime())) { remind(); return }
-    missionDeadline = SystemClock.elapsedRealtime() + AlarmPlaybackPolicy.MISSION_IDLE_MS
+    missionDeadline = SystemClock.elapsedRealtime() + AlarmPlaybackPolicy.missionLimit(limitMs)
     active.put("missionDeadline", missionDeadline)
     // Frequent card flips and shakes should not block rendering on disk I/O.
     AlarmStore.setActive(this, active, synchronous = false)
@@ -172,14 +174,20 @@ class AlarmRingService : Service() {
       if (player === it) {
         applyGain()
         it.start()
+        android.util.Log.i("RefreshAlarm", "audioStartedAt=${System.currentTimeMillis()}")
       }
     }
     next.setOnErrorListener { _, _, _ -> if (retry) play(fallback, fallback, false); true }
     try { next.setDataSource(this, source); next.prepareAsync() }
     catch (_: Exception) { if (retry) play(fallback, fallback, false) }
+    // A decoder that never invokes either callback must not leave a silent alarm.
+    if (retry) handler.postDelayed({
+      if (player === next && !runCatching { next.isPlaying }.getOrDefault(false)) play(fallback, fallback, false)
+    }, 3_000L)
   }
   override fun onDestroy() {
     handler.removeCallbacksAndMessages(null)
+    AlarmHandoff.release()
     if (running === this) running = null
     player?.release(); player = null
     vibrator?.cancel()

@@ -6,9 +6,11 @@ export const soundCatalog = [
     "category": "Soft",
     "file": "lesiakower-lo-fi-alarm-clock-243766.mp3",
     "nativeFile": "daybreak_lofi.wav",
+    "playbackFile": "alarms/daybreak_lofi.wav",
     "duration": 29,
     "nativeDuration": 29,
-    "originalDuration": 59.95197278911564
+    "originalDuration": 59.95197278911564,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "wake_up",
@@ -16,9 +18,11 @@ export const soundCatalog = [
     "category": "Soft",
     "file": "freesound_community-wake-up-33353.mp3",
     "nativeFile": "daybreak_wake_up.wav",
+    "playbackFile": "alarms/daybreak_wake_up.wav",
     "duration": 20.5,
-    "nativeDuration": 20.5,
-    "originalDuration": 20.519954648526078
+    "nativeDuration": 20.519954648526078,
+    "originalDuration": 20.519954648526078,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "classic_bell",
@@ -26,9 +30,11 @@ export const soundCatalog = [
     "category": "Classic",
     "file": "78562__joedeshon__alarm_clock_ringing_01.wav",
     "nativeFile": "daybreak_classic_bell.wav",
+    "playbackFile": "alarms/daybreak_classic_bell.wav",
     "duration": 26.4,
-    "nativeDuration": 26.4,
-    "originalDuration": 26.435736961451248
+    "nativeDuration": 26.435736961451248,
+    "originalDuration": 26.435736961451248,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "retro_clock",
@@ -36,9 +42,11 @@ export const soundCatalog = [
     "category": "Classic",
     "file": "freesound_community-alarm-clock-90867.mp3",
     "nativeFile": "daybreak_retro_clock.wav",
+    "playbackFile": "alarms/daybreak_retro_clock.wav",
     "duration": 6.1,
-    "nativeDuration": 6.1,
-    "originalDuration": 6.12
+    "nativeDuration": 6.12,
+    "originalDuration": 6.12,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "short_ring",
@@ -46,9 +54,11 @@ export const soundCatalog = [
     "category": "Classic",
     "file": "freesound_community-alarm-clock-short-6402.mp3",
     "nativeFile": "daybreak_short_ring.wav",
+    "playbackFile": "alarms/daybreak_short_ring.wav",
     "duration": 8.6,
-    "nativeDuration": 8.6,
-    "originalDuration": 8.591972789115646
+    "nativeDuration": 8.591972789115646,
+    "originalDuration": 8.591972789115646,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "digital_beep",
@@ -56,9 +66,11 @@ export const soundCatalog = [
     "category": "Digital",
     "file": "371292__iamgiorgio__b1_alarm.mp3",
     "nativeFile": "daybreak_digital_beep.wav",
+    "playbackFile": "alarms/daybreak_digital_beep.wav",
     "duration": 5,
-    "nativeDuration": 5,
-    "originalDuration": 4.963265306122449
+    "nativeDuration": 4.963265306122449,
+    "originalDuration": 4.963265306122449,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "pulse",
@@ -66,9 +78,11 @@ export const soundCatalog = [
     "category": "Digital",
     "file": "211132__martinbeltov__alarm-type-sound.wav",
     "nativeFile": "daybreak_pulse.wav",
+    "playbackFile": "alarms/daybreak_pulse.wav",
     "duration": 29,
     "nativeDuration": 29,
-    "originalDuration": 40.919773242630384
+    "originalDuration": 40.919773242630384,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "bright_alarm",
@@ -76,9 +90,11 @@ export const soundCatalog = [
     "category": "Digital",
     "file": "freesound_community-wake-up-alarm-68067.mp3",
     "nativeFile": "daybreak_bright_alarm.wav",
+    "playbackFile": "alarms/daybreak_bright_alarm.wav",
     "duration": 17.1,
-    "nativeDuration": 17.1,
-    "originalDuration": 17.057959183673468
+    "nativeDuration": 17.057959183673468,
+    "originalDuration": 17.057959183673468,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "electronic",
@@ -86,9 +102,11 @@ export const soundCatalog = [
     "category": "Digital",
     "file": "u_inx5oo5fv3-alarm-327234.mp3",
     "nativeFile": "daybreak_electronic.wav",
+    "playbackFile": "alarms/daybreak_electronic.wav",
     "duration": 7.1,
-    "nativeDuration": 7.1,
-    "originalDuration": 7.08
+    "nativeDuration": 7.08,
+    "originalDuration": 7.08,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "steady_alarm",
@@ -96,9 +114,11 @@ export const soundCatalog = [
     "category": "Digital",
     "file": "soundreality-alarm-471496.mp3",
     "nativeFile": "daybreak_steady_alarm.wav",
+    "playbackFile": "alarms/daybreak_steady_alarm.wav",
     "duration": 29,
     "nativeDuration": 29,
-    "originalDuration": 29.903990929705216
+    "originalDuration": 29.903990929705216,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "rooster",
@@ -106,9 +126,11 @@ export const soundCatalog = [
     "category": "Playful",
     "file": "freesound_community-brahma-rooster-89888.mp3",
     "nativeFile": "daybreak_rooster.wav",
+    "playbackFile": "alarms/daybreak_rooster.wav",
     "duration": 3.8,
-    "nativeDuration": 3.8,
-    "originalDuration": 3.84
+    "nativeDuration": 3.84,
+    "originalDuration": 3.84,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "funny_alarm",
@@ -116,9 +138,11 @@ export const soundCatalog = [
     "category": "Playful",
     "file": "3dabrar-funny-alarm-317531.mp3",
     "nativeFile": "daybreak_funny_alarm.wav",
+    "playbackFile": "alarms/daybreak_funny_alarm.wav",
     "duration": 9.5,
-    "nativeDuration": 9.5,
-    "originalDuration": 9.503990929705216
+    "nativeDuration": 9.503990929705216,
+    "originalDuration": 9.503990929705216,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "arcade",
@@ -126,9 +150,11 @@ export const soundCatalog = [
     "category": "Playful",
     "file": "8footdino_on_scratch-alarm-301729.mp3",
     "nativeFile": "daybreak_arcade.wav",
+    "playbackFile": "alarms/daybreak_arcade.wav",
     "duration": 23,
-    "nativeDuration": 23,
-    "originalDuration": 22.961632653061226
+    "nativeDuration": 22.961632653061226,
+    "originalDuration": 22.961632653061226,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "biohazard",
@@ -136,9 +162,11 @@ export const soundCatalog = [
     "category": "Intense",
     "file": "dennish18-biohazard-alarm-143105.mp3",
     "nativeFile": "daybreak_biohazard.wav",
+    "playbackFile": "alarms/daybreak_biohazard.wav",
     "duration": 29,
     "nativeDuration": 29,
-    "originalDuration": 49.99836734693878
+    "originalDuration": 49.99836734693878,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "emergency",
@@ -146,9 +174,11 @@ export const soundCatalog = [
     "category": "Intense",
     "file": "jeremayjimenez-greece-eas-alarm-451404.mp3",
     "nativeFile": "daybreak_emergency.wav",
+    "playbackFile": "alarms/daybreak_emergency.wav",
     "duration": 10.1,
-    "nativeDuration": 10.1,
-    "originalDuration": 10.05596371882086
+    "nativeDuration": 10.05596371882086,
+    "originalDuration": 10.05596371882086,
+    "trimmedStartSeconds": 0
   },
   {
     "id": "adhan_alafasy_fajr",
@@ -157,9 +187,11 @@ export const soundCatalog = [
     "file": "Y2Mate.is - Adhan Call to prayer _ Mishary Rashid Alafasy _ Fajr _ Maqam Hijaz .mp3",
     "fullPlayback": true,
     "nativeFile": "daybreak_adhan_alafasy_fajr.wav",
-    "duration": 254.3,
+    "playbackFile": "prepared/refresh_full_adhan_alafasy_fajr.wav",
+    "duration": 234.9,
     "nativeDuration": 29,
-    "originalDuration": 254.27696145124716
+    "originalDuration": 254.27696145124716,
+    "trimmedStartSeconds": 19.4
   },
   {
     "id": "adhan",
@@ -168,8 +200,10 @@ export const soundCatalog = [
     "file": "Y2Mate.is - Best Adhan in the world - Muslim Call to Prayer.mp3",
     "fullPlayback": true,
     "nativeFile": "daybreak_adhan.wav",
-    "duration": 213.4,
+    "playbackFile": "prepared/refresh_full_adhan.wav",
+    "duration": 204.5,
     "nativeDuration": 29,
-    "originalDuration": 213.42145124716552
+    "originalDuration": 213.42145124716552,
+    "trimmedStartSeconds": 8.88
   }
 ] as const;

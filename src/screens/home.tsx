@@ -57,7 +57,7 @@ export function Home() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <Icon name="sunny-outline" size={17} color={c.peach} />
+          <Icon name="moon-outline" size={17} color={c.peach} />
           <T variant="eyebrow" style={{ color: c.peach }}>
             REFRESH
           </T>
@@ -70,7 +70,7 @@ export function Home() {
         title={`${greeting},`}
         subtitle={
           now.getHours() < 18
-            ? "Make room for a fresh start."
+            ? "A fresh start. A little gratitude."
             : "Set tonight. Start fresh tomorrow."
         }
         right={
@@ -180,7 +180,7 @@ export function Home() {
           </View>
         </Tap>
       </View>
-      <Quote />
+      <Quote text="A new day. A fresh intention. Bismillah." />
       <Tap
         onPress={() =>
           router.push({

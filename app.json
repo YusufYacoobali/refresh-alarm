@@ -10,6 +10,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yacoobali.alarm",
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
+      },
       "infoPlist": {
         "NSAlarmKitUsageDescription": "Refresh uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
         "NSMotionUsageDescription": "Refresh uses motion only during your shake-to-wake challenge.",
@@ -19,14 +22,17 @@
     "android": {
       "package": "com.yacoobali.alarm",
       "permissions": [
-        "SCHEDULE_EXACT_ALARM",
-        "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/icon.png",
+      "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
@@ -68,8 +74,22 @@
         }
       ],
       "expo-asset",
-      ["expo-image-picker", { "photosPermission": "Choose a photo for your alarm background.", "cameraPermission": false, "microphonePermission": false }],
-      "./plugins/with-refresh-alarm.cjs"
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a photo for your alarm background.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/with-refresh-alarm.cjs",
+      "./plugins/with-app-blocking.cjs"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bbf01fbf-12d2-4c92-b039-568f37708151"
+      }
+    }
   }
 }

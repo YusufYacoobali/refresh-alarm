@@ -1,13 +1,16 @@
 import { sounds, soundName, validSound } from "./sounds";
+import { APP_BLOCK_MINUTES } from "./app-blocking";
+import { selectedSupplications, supplications, type SupplicationId } from "./supplications";
 import type { SoundId } from "./sounds";
 export { sounds, soundName };
 export type { SoundId };
-export type Challenge = "none" | "math" | "memory" | "shake" | "supplication";
+export type Challenge = "none" | "math" | "memory" | "shake" | "supplication" | "number_order" | "color_focus" | "sequence" | "fajr_reminder";
 export type Mission = {
   kind: Exclude<Challenge, "none">;
   difficulty: "gentle" | "bright";
   /** Older saved missions play one round. */
   rounds?: number;
+  duaIds?: SupplicationId[];
 };
 export const MAX_MISSION_ROUNDS = 10;
 export function missionRounds(mission?: Pick<Mission, "rounds">) {
@@ -37,6 +40,8 @@ export type Alarm = {
   volume?: number;
   volumeRampSeconds?: number;
   missionReminder?: boolean;
+  /** Native app selection is opaque on iOS; Android stores package names. */
+  appBlock?: { enabled: boolean; selection: string; count: number; minutes?: number; group?: "social" | "custom" };
   snooze: number;
   registration?: Registration;
   nextAt?: number;
@@ -61,7 +66,7 @@ export function copyAlarm(alarm: Alarm, id: string, existingLabels: string[]): A
     label = `${alarm.label.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
     number += 1;
   } while (labels.has(label));
-  return { ...settings, id, label, days: [...alarm.days], missions: alarm.missions?.map(m => ({ ...m })) };
+  return { ...settings, id, label, days: [...alarm.days], ...(alarm.appBlock ? { appBlock: { ...alarm.appBlock } } : {}), missions: alarm.missions?.map(m => ({ ...m, ...(m.duaIds ? { duaIds: [...m.duaIds] } : {}) })) };
 }
 export const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const challengeNames: Record<Challenge, string> = {
@@ -70,6 +75,10 @@ export const challengeNames: Record<Challenge, string> = {
   memory: "Memory match",
   shake: "Shake to wake",
   supplication: "Islamic supplication",
+  number_order: "Number trail",
+  color_focus: "Tile recall",
+  sequence: "Pattern echo",
+  fajr_reminder: "Fajr reminder",
 };
 export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">): Mission[] {
   return alarm.missions ?? (alarm.challenge === "none" ? [] : [{ kind: alarm.challenge, difficulty: alarm.difficulty }]);
@@ -80,11 +89,16 @@ export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "di
 }
 export function missionLabel(mission: Mission) {
   const rounds = missionRounds(mission);
-  return `${challengeNames[mission.kind]}${rounds > 1 ? ` · ${rounds} rounds` : ""}`;
+  const duas = mission.kind === "supplication" ? ` · ${selectedSupplications(mission.duaIds).map(d => d.title).join(", ")}` : "";
+  return `${challengeNames[mission.kind]}${duas}${rounds > 1 ? ` · ${rounds} rounds` : ""}`;
 }
-export function missionDescription(kind: Mission["kind"], difficulty: Mission["difficulty"]) {
-  if (kind === "supplication") return "3 duas · Recite once, then 3 times each";
+export function missionDescription(kind: Mission["kind"], difficulty: Mission["difficulty"], duaIds?: SupplicationId[]) {
+  if (kind === "supplication") return selectedSupplications(duaIds).map(d => `${d.title} · ${d.repetitions}×`).join(" / ");
+  if (kind === "fajr_reminder") return "One full hadith · Rotates through five reminders";
   const hard = difficulty === "bright";
+  if (kind === "number_order") return hard ? "12 numbers · Tap from largest to smallest" : "8 numbers · Tap from smallest to largest";
+  if (kind === "color_focus") return `${hard ? "6×6" : "4×4"} grid · Remember ${hard ? 8 : 3} tiles · 2-second preview`;
+  if (kind === "sequence") return hard ? "Remember a 6-tile sequence" : "Remember a 4-tile sequence";
   if (kind === "math") return hard ? "3 multiplication questions" : "3 addition questions";
   if (kind === "memory") return hard ? "4 pairs · 0.8-second preview" : "4 pairs · 2-second preview";
   return hard ? "20 separate shakes" : "12 separate shakes";
@@ -154,15 +168,16 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose valid repeat days.");
   if (!a.label.trim() || a.label.length > 48)
     throw new Error("Give your alarm a name (up to 48 characters).");
-  if (!["none", "math", "memory", "shake", "supplication"].includes(a.challenge))
+  if (!Object.hasOwn(challengeNames, a.challenge))
     throw new Error("Choose a wake-up challenge.");
   if (
     !["gentle", "bright"].includes(a.difficulty) ||
     ![0, 5, 10, 15].includes(a.snooze)
   )
     throw new Error("Choose valid challenge and snooze settings.");
-  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 4 ||
-    a.missions.some(m => !m || !["math", "memory", "shake", "supplication"].includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 8 ||
+    a.missions.some(m => !m || (m.kind as string) === "none" || !Object.hasOwn(challengeNames, m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+      (m.duaIds !== undefined && (m.kind !== "supplication" || !Array.isArray(m.duaIds) || !m.duaIds.length || new Set(m.duaIds).size !== m.duaIds.length || m.duaIds.some(id => !supplications.some(d => d.id === id)))) ||
       (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))) ||
     new Set(a.missions.map(m => m.kind)).size !== a.missions.length))
     throw new Error(`Choose each mission once, with a valid difficulty and 1–${MAX_MISSION_ROUNDS} rounds.`);
@@ -176,6 +191,14 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose a valid gradual volume duration.");
   if (a.missionReminder !== undefined && typeof a.missionReminder !== "boolean")
     throw new Error("Choose a valid mission reminder preference.");
+  if (a.appBlock !== undefined && (!a.appBlock || typeof a.appBlock.enabled !== "boolean" ||
+    typeof a.appBlock.selection !== "string" || !Number.isInteger(a.appBlock.count) || a.appBlock.count < 0 ||
+    (a.appBlock.enabled && (!a.appBlock.selection || a.appBlock.count === 0))))
+    throw new Error("Choose the apps to block before enabling app blocking.");
+  if (a.appBlock?.minutes !== undefined && !APP_BLOCK_MINUTES.some(minutes => minutes === a.appBlock!.minutes))
+    throw new Error("Choose a valid app-block duration.");
+  if (a.appBlock?.group !== undefined && !["social", "custom"].includes(a.appBlock.group))
+    throw new Error("Choose a valid app group.");
 }
 export function mathQuestion(level: Alarm["difficulty"], random = Math.random) {
   const a = Math.floor(random() * (level === "bright" ? 15 : 8)) + 2;

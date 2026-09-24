@@ -11,6 +11,7 @@ import { AppState, Platform } from "react-native";
 import AlarmKit from "@/services/alarm-kit";
 import AndroidAlarm from "@/services/android-alarm";
 import { cancelMissionTimeout } from "@/services/mission-timeout";
+import { fajrReminderIndex } from "@/utils/fajr-reminders";
 import { CustomSound, setCustomSounds } from "@/utils/sounds";
 import {
   Alarm,
@@ -19,6 +20,8 @@ import {
   nextOccurrence,
   copyAlarm,
   orderAlarms,
+  alarmMissions,
+  missionRounds,
 } from "@/utils/alarms";
 import {
   cancelRegistration,
@@ -35,6 +38,7 @@ type Data = {
   theme: "serene" | "moonlight" | "ocean";
   journal: JournalEntry[];
   completions: string[];
+  fajrReminderIndex?: number;
   customSounds?: CustomSound[];
   silentMissions?: boolean;
   snoozed?: { alarmId: string; at: number; registration: Registration };
@@ -296,6 +300,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : a,
         ),
         completions: [...new Set([...current.current.completions, today])],
+        fajrReminderIndex: fajrReminderIndex(fajrReminderIndex(current.current.fajrReminderIndex) +
+          alarmMissions(alarm).filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
       });
       AlarmKit?.completeAlarm?.(alarm.id);
     });

@@ -15,6 +15,6 @@ export const audioSources = {
   arcade: require("../../assets/audio/alarms/daybreak_arcade.wav"),
   biohazard: require("../../assets/audio/alarms/daybreak_biohazard.wav"),
   emergency: require("../../assets/audio/alarms/daybreak_emergency.wav"),
-  adhan_alafasy_fajr: require("../../assets/audio/Y2Mate.is - Adhan Call to prayer _ Mishary Rashid Alafasy _ Fajr _ Maqam Hijaz .mp3"),
-  adhan: require("../../assets/audio/Y2Mate.is - Best Adhan in the world - Muslim Call to Prayer.mp3"),
+  adhan_alafasy_fajr: require("../../assets/audio/prepared/refresh_full_adhan_alafasy_fajr.wav"),
+  adhan: require("../../assets/audio/prepared/refresh_full_adhan.wav"),
 };

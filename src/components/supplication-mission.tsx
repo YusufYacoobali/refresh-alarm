@@ -2,19 +2,20 @@ import React, { useRef, useState } from "react";
 import { View } from "react-native";
 import { Button, T } from "./ui";
 import { colors as c, fonts } from "@/theme";
-import { Supplication, supplications } from "@/utils/supplications";
+import { Supplication } from "@/utils/supplications";
 
 // Keep the honorific in the Arabic font even within English/transliterated text.
-function WithHonorific({ text }: { text: string }) {
+export function WithHonorific({ text }: { text: string }) {
   return text.split("ﷺ").map((part, i) => <React.Fragment key={i}>
     {i > 0 && <T style={{ fontFamily: fonts.arabic, fontSize: 22, lineHeight: 30 }}>ﷺ</T>}
     {part}
   </React.Fragment>);
 }
 
-export function SupplicationMission({ dua, index, isExpired, onDone }: {
+export function SupplicationMission({ dua, index, total, isExpired, onDone }: {
   dua: Supplication;
   index: number;
+  total: number;
   isExpired(): boolean;
   onDone(): void;
 }) {
@@ -34,7 +35,7 @@ export function SupplicationMission({ dua, index, isExpired, onDone }: {
     <View style={{ gap: 4 }}>
       <T variant="heading" testID="dua-title">{dua.title}</T>
       <T variant="small" style={{ color: c.muted }}>
-        Dua {index + 1} of {supplications.length} · {dua.occasion}
+        Dua {index + 1} of {total} · {dua.occasion}
       </T>
     </View>
     <T testID="dua-arabic" selectable accessibilityLanguage="ar"

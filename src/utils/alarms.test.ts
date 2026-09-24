@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { missionSecondsLeft } from "./alarm-playback";
+import { fajrReminderIndex } from "./fajr-reminders";
+import { APP_BLOCK_MINUTES, socialAppIds } from "./app-blocking";
+
+test("Fajr rotation wraps and reading countdown retains its five-minute deadline", () => {
+  assert.equal(fajrReminderIndex(), 0);
+  assert.equal(fajrReminderIndex(5), 0);
+  assert.equal(fajrReminderIndex(7), 2);
+  for (const value of [-1, NaN, Infinity, 1.5]) assert.equal(fajrReminderIndex(value), 0);
+  assert.equal(missionSecondsLeft(300_000, 0, 300_000), 300);
+  assert.equal(missionSecondsLeft(300_000, 61_000, 300_000), 239);
+  assert.equal(missionSecondsLeft(300_000, 300_000, 300_000), 0);
+});
 
 test("mission countdown uses elapsed wall time, including time spent asleep", () => {
   const deadline = 100_000;
@@ -37,6 +49,30 @@ const alarm: Alarm = {
   sound: "system",
   snooze: 5,
 };
+
+test("app blocking keeps legacy alarms valid and rejects enabled empty selections", () => {
+  assert.doesNotThrow(() => validateAlarm(alarm));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, appBlock: { enabled: false, selection: "", count: 0 } }));
+  const enabled = { enabled: true, selection: '["com.instagram.android"]', count: 1 };
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, appBlock: enabled }));
+  for (const patch of [{ count: 0 }, { selection: "" }, { count: -1 }, { count: 1.5 }])
+    assert.throws(() => validateAlarm({ ...alarm, appBlock: { ...enabled, ...patch } }), /Choose the apps/);
+  const copied = copyAlarm({ ...alarm, appBlock: enabled }, "copy", []);
+  copied.appBlock!.enabled = false;
+  assert.equal(enabled.enabled, true);
+  for (const minutes of APP_BLOCK_MINUTES)
+    assert.doesNotThrow(() => validateAlarm({ ...alarm, appBlock: { ...enabled, minutes, group: "social" } }));
+  for (const minutes of [0, -5, 7, 1.5, 120, NaN])
+    assert.throws(() => validateAlarm({ ...alarm, appBlock: { ...enabled, minutes } }), /duration/);
+});
+
+test("Social group includes the expanded social catalog and selects only installed packages", () => {
+  const ids = ["com.instagram.android", "com.google.android.youtube", "com.reddit.frontpage", "com.zhiliaoapp.musically", "com.instagram.lite", "com.ss.android.ugc.trill",
+    "com.facebook.katana", "com.facebook.lite", "com.instagram.barcelona", "com.twitter.android", "com.snapchat.android", "com.pinterest", "com.linkedin.android", "com.tumblr", "tv.twitch.android.app", "com.discord"];
+  assert.deepEqual(socialAppIds([...ids, "com.android.settings", "com.whatsapp", "org.telegram.messenger", ids[0]].map(id => ({ id }))), ids);
+  assert.deepEqual(socialAppIds([{ id: "com.reddit.frontpage" }]), ["com.reddit.frontpage"]);
+  assert.deepEqual(socialAppIds([]), []);
+});
 
 test("alarm ordering defaults to clock time and preserves ties without mutating records", () => {
   const input = [{ ...alarm, id: "evening", hour: 19 }, { ...alarm, id: "later", minute: 30 },
@@ -216,4 +252,12 @@ test("silent missions is optional for existing alarms and validates saved prefer
   assert.doesNotThrow(() => validateAlarm({ ...alarm, silentMissions: true }));
   assert.doesNotThrow(() => validateAlarm({ ...alarm, silentMissions: false }));
   assert.throws(() => validateAlarm({ ...alarm, silentMissions: "false" } as unknown as Alarm));
+});
+
+test("new mission types and per-mission dua selections validate and preserve legacy defaults", () => {
+  for (const kind of ["number_order", "color_focus", "sequence", "fajr_reminder"] as const)
+    assert.doesNotThrow(() => validateAlarm({ ...alarm, challenge: kind, missions: [{ kind, difficulty: "bright", rounds: 2 }] }));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, missions: [{ kind: "supplication", difficulty: "gentle", duaIds: ["protection"] }] }));
+  for (const duaIds of [[], ["unknown"], ["waking", "waking"], null, "waking"])
+    assert.throws(() => validateAlarm({ ...alarm, missions: [{ kind: "supplication", difficulty: "gentle", duaIds }] } as Alarm));
 });

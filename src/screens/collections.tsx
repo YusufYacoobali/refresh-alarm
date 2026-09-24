@@ -25,6 +25,7 @@ import { useApp } from "@/state/app-state";
 import { Mission, alarmMissions, missionDescription, missionLabel, missionRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
+import { selectedSupplications, supplications } from "@/utils/supplications";
 
 export function Sounds() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
@@ -87,7 +88,11 @@ const challenges: { id: Mission["kind"]; name: string; subtitle: string }[] = [
   { id: "math", name: "Math puzzle", subtitle: "Get your brain into gear." },
   { id: "memory", name: "Memory match", subtitle: "A little focus before the day begins." },
   { id: "shake", name: "Shake to wake", subtitle: "Get moving. Get your morning going." },
-  { id: "supplication", name: "Islamic supplication", subtitle: "Three duas, one at a time." },
+  { id: "number_order", name: "Number trail", subtitle: "Find your way through a jumble of numbers." },
+  { id: "color_focus", name: "Tile recall", subtitle: "Remember the lights. Find the same tiles." },
+  { id: "sequence", name: "Pattern echo", subtitle: "Watch the lights. Echo the pattern." },
+  { id: "supplication", name: "Islamic supplication", subtitle: "Make space for the duas you choose." },
+  { id: "fajr_reminder", name: "Fajr reminder", subtitle: "A moment to remember the reward of Fajr." },
 ];
 export function Challenges() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
@@ -109,7 +114,7 @@ export function Challenges() {
       return <Card key={item.id} style={{ borderColor: mission ? c.lavender : c.line }}>
         <Tap label={item.name} selected={!!mission} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}>
-            {item.id === "supplication" ? <View style={{ width: 88, height: 88, alignItems: "center", justifyContent: "center" }}><Icon name="book-outline" size={40} color={c.peach} /></View> : <ClayMotion name={item.id} size={88} />}
+            <ClayMotion name={item.id} size={88} />
             <View style={{ flex: 1, gap: 4 }}><T variant="label">{item.name}</T><T variant="small" style={{ color: c.muted }}>{item.subtitle}</T></View>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: mission ? c.lavender : c.raised, alignItems: "center", justifyContent: "center" }}>
               {mission ? <T variant="label" style={{ color: c.ink }}>{index + 1}</T> : <Icon name="add" size={18} />}
@@ -117,7 +122,21 @@ export function Challenges() {
           </View>
         </Tap>
         {mission && <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 12 }}>
-          {item.id !== "supplication" && <>
+          {item.id === "supplication" && <>
+            <T variant="eyebrow" style={{ color: c.muted }}>YOUR DUAS</T>
+            <T variant="small" style={{ color: c.muted }}>Choose one or more. Each keeps its recitation count.</T>
+            {supplications.map(dua => {
+              const ids = selectedSupplications(mission.duaIds).map(d => d.id);
+              const active = ids.includes(dua.id);
+              return <Tap key={dua.id} label={`Dua: ${dua.title}`} selected={active} disabled={active && ids.length === 1} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, duaIds: active ? ids.filter(id => id !== dua.id) : [...ids, dua.id] } : m))}>
+                <View style={{ padding: 12, borderRadius: 14, backgroundColor: c.raised, flexDirection: "row", gap: 10, alignItems: "center" }}>
+                  <Icon name={active ? "checkmark-circle" : "ellipse-outline"} color={active ? c.lavender : c.faint} />
+                  <View style={{ flex: 1 }}><T variant="label">{dua.title}</T><T variant="small" style={{ color: c.muted }}>{dua.occasion} · {dua.repetitions}×</T></View>
+                </View>
+              </Tap>;
+            })}
+          </>}
+          {item.id !== "supplication" && item.id !== "fajr_reminder" && <>
           <T variant="eyebrow" style={{ color: c.muted }}>DIFFICULTY</T>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {(["gentle", "bright"] as const).map(level => <Tap key={level} label={`${item.name} ${level === "gentle" ? "Easy" : "Hard"}`} selected={mission.difficulty === level} style={{ flex: 1 }} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, difficulty: level } : m))}>
@@ -138,8 +157,8 @@ export function Challenges() {
               </Picker>
             </Host>
           </View>
-          <T variant="small" style={{ color: c.peach }}>Per round: {missionDescription(item.id, mission.difficulty)}</T>
-          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: String(missionRounds(mission)) } })}>
+          <T variant="small" style={{ color: c.peach }}>Per round: {missionDescription(item.id, mission.difficulty, mission.duaIds)}</T>
+          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: String(missionRounds(mission)), duaIds: mission.duaIds?.join(",") } })}>
             <T variant="small" style={{ color: c.lavender }}>Try this mission →</T>
           </Tap>
         </View>}

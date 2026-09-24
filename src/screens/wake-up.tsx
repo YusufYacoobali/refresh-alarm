@@ -2,9 +2,13 @@ import { goHome } from "@/utils/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, BackHandler, AppState, useWindowDimensions } from "react-native";
 import { AlarmSound } from "@/components/alarm-sound";
+import { AppBlockStatus } from "@/components/app-block-status";
 import { useMissionReminder } from "@/components/use-mission-reminder";
 import { SupplicationMission } from "@/components/supplication-mission";
-import { supplications } from "@/utils/supplications";
+import { selectedSupplications } from "@/utils/supplications";
+import { NumberTrail, TileRecall, PatternEcho } from "@/components/focus-missions";
+import { FajrReminderMission } from "@/components/fajr-reminder-mission";
+import { fajrReminderIndex } from "@/utils/fajr-reminders";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
@@ -35,6 +39,7 @@ import {
   alarmMissions,
   missionRounds,
   Mission,
+  challengeNames,
 } from "@/utils/alarms";
 import { art, colors as c, fonts } from "@/theme";
 
@@ -59,6 +64,7 @@ function useWakeAlarm() {
     kind?: Challenge;
     difficulty?: "gentle" | "bright";
     rounds?: string;
+    duaIds?: string;
   }>();
   const { data } = useApp();
   return {
@@ -88,7 +94,7 @@ function MissingAlarm() {
   );
 }
 export function Ringing() {
-  const { alarm, isPreview, eventId, reminder, kind, difficulty, rounds } = useWakeAlarm();
+  const { alarm, isPreview, eventId, reminder, kind, difficulty, rounds, duaIds } = useWakeAlarm();
   const { finish, busy } = useApp();
   const insets = useSafeAreaInsets();
   const acting = useRef(false);
@@ -103,7 +109,7 @@ export function Ringing() {
       if (alarmMissions(alarm!).length)
         router.replace({
           pathname: "/challenge",
-          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, ...(isPreview ? { kind, difficulty, rounds } : {}) },
+          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, ...(isPreview ? { kind, difficulty, rounds, duaIds } : {}) },
         });
       else {
         await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
@@ -527,15 +533,17 @@ function ShakeGame({
 }
 export function ChallengeScreen() {
   const { height } = useWindowDimensions();
-  const { alarm, isPreview, kind, difficulty, rounds, eventId } = useWakeAlarm();
+  const { alarm, isPreview, kind, difficulty, rounds, eventId, duaIds } = useWakeAlarm();
   const { finish, busy, data, setMissionSilenced } = useApp();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
   const [missionIndex, setMissionIndex] = useState(0);
   const [roundIndex, setRoundIndex] = useState(0);
   const [duaIndex, setDuaIndex] = useState(0);
+  const [fajrStart] = useState(() => fajrReminderIndex(data.fajrReminderIndex));
+  const readingFajr = (isPreview ? kind : alarm && alarmMissions(alarm)[missionIndex]?.kind) === "fajr_reminder";
   const step = `${missionIndex}:${roundIndex}:${duaIndex}`;
-  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds });
+  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds, duaIds }, readingFajr ? 300_000 : 60_000);
   const silent = alarm?.silentMissions ?? data.silentMissions ?? true;
   const finishing = useRef(false);
   const [working, setWorking] = useState(false);
@@ -543,8 +551,9 @@ export function ChallengeScreen() {
   useEffect(() => { advancing.current = false; }, [missionIndex, roundIndex]);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
-  const missions: Mission[] = isPreview && kind && kind !== "none" ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ rounds: Number(rounds) }) }] : alarmMissions(alarm);
+  const missions: Mission[] = isPreview && kind && kind !== "none" && Object.hasOwn(challengeNames, kind) ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ rounds: Number(rounds) }), ...(kind === "supplication" ? { duaIds: selectedSupplications(duaIds?.split(",")).map(d => d.id) } : {}) }] : alarmMissions(alarm);
   const mission = missions[missionIndex];
+  const duas = selectedSupplications(mission?.duaIds);
   const totalRounds = missionRounds(mission);
   const challenge = fallback ? "math" : mission?.kind ?? "none";
   const level = mission?.difficulty ?? "gentle";
@@ -581,7 +590,7 @@ export function ChallengeScreen() {
     } else void complete().catch(() => {});
   }
   return (
-    <Screen scrollResetKey={step} safeTop style={{ gap: height < 700 ? 16 : 24 }}>
+    <Screen scroll={!['number_order', 'color_focus', 'sequence'].includes(challenge)} scrollResetKey={step} safeTop style={{ gap: height < 700 ? 12 : 18, ...(challenge === "color_focus" && level === "bright" ? { paddingHorizontal: 12 } : {}) }}>
       <AlarmSound alarm={alarm} preview={isPreview} playPreview silent={silent} immediate />
       <View
         style={{
@@ -591,7 +600,7 @@ export function ChallengeScreen() {
         }}
       >
         <T variant="heading" style={{ flex: 1 }}>
-          {challenge === "supplication" ? "Morning duas" : challenge === "memory" ? "Match the pairs" : challenge === "shake" ? "Shake to wake" : "Solve the math"}
+          {challenge === "supplication" ? "Morning duas" : challenge === "memory" ? "Match the pairs" : challenge === "math" ? "Solve the math" : challengeNames[challenge]}
         </T>
         <Tap label={silent ? "Turn mission sound on" : "Silence mission sound"} selected={!silent} disabled={busy || working}
           onPress={() => void setMissionSilenced(alarm.id, !silent).catch(() => {})}>
@@ -629,18 +638,27 @@ export function ChallengeScreen() {
             onPress={() => void complete().catch(() => {})}
           />
         </>
+      ) : challenge === "fajr_reminder" ? (
+        <FajrReminderMission key={step} index={fajrStart + roundIndex} isExpired={isExpired} onDone={nextRound} />
       ) : challenge === "supplication" ? (
         <SupplicationMission
           key={`supplication-${step}`}
-          dua={supplications[duaIndex]}
+          dua={duas[duaIndex]}
           index={duaIndex}
+          total={duas.length}
           isExpired={isExpired}
           onDone={() => {
             if (isExpired()) return;
-            if (duaIndex + 1 < supplications.length) setDuaIndex(i => i + 1);
+            if (duaIndex + 1 < duas.length) setDuaIndex(i => i + 1);
             else nextRound();
           }}
         />
+      ) : challenge === "number_order" ? (
+        <NumberTrail key={step} difficulty={level} onDone={nextRound} />
+      ) : challenge === "color_focus" ? (
+        <TileRecall key={step} difficulty={level} onDone={nextRound} />
+      ) : challenge === "sequence" ? (
+        <PatternEcho key={step} difficulty={level} onDone={nextRound} />
       ) : challenge === "memory" ? (
         <MemoryGame
           key={`memory-${missionIndex}-${roundIndex}`}
@@ -699,7 +717,8 @@ export function Success() {
             : "Alarm done. Morning started.\nNow make a little time for you."}
         </T>
       </Enter>
-      <Quote text="Let in some light. Take a stretch. Meet your morning." />
+        <Quote text="Let in some light. Take a stretch. Meet your morning." />
+        {preview !== "1" && <AppBlockStatus />}
       <Button
         title="Hello, new day"
         icon="arrow-forward"

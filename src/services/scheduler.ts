@@ -61,12 +61,23 @@ export async function scheduleAlarm(
   at?: Date,
   reuse?: Registration,
 ): Promise<Registration> {
+  if (Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && !alarmKitAvailable())
+    throw new Error("This iPhone needs an updated Refresh build with system alarm support. Your alarm has not been enabled.");
   const permission = await requestPermission();
   if (permission === "denied")
     throw new Error(
       "Alarm permission is off. Enable it in Settings, then try again. Your alarm has not been enabled.",
     );
   if (Platform.OS === "web") return { kind: "preview", ids: [] };
+  if (alarm.appBlock?.enabled) {
+    const bridge = Platform.OS === "ios" ? AlarmKit : AndroidAlarm;
+    if ((alarm.appBlock.minutes ?? 5) !== 5 && bridge?.appBlockVersion?.() !== 2)
+      throw new Error("Install the updated Refresh build to use selectable app-block durations.");
+    if (!bridge?.appBlockStatus?.().authorized)
+      throw new Error("Allow app-blocking access in this alarm’s settings, then save again.");
+    if (Platform.OS === "ios" && !alarmKitAvailable())
+      throw new Error("App blocking with system alarms requires iOS 26 or later.");
+  }
   const imported = isCustomSound(alarm.sound) ? await customAudioSource(alarm.sound) : undefined;
   if (imported && Platform.OS === "ios" && !soundFile(alarm.sound)) throw new Error("Import this sound again to prepare its iOS alarm excerpt.");
   if (Platform.OS === "android") {
@@ -86,8 +97,8 @@ export async function scheduleAlarm(
     }
     const id = reuse?.kind === "android" ? reuse.ids[0] : Crypto.randomUUID();
     const sound = resolveSoundId(alarm.sound);
-    const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.mp3` : soundFile(alarm.sound);
-    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
+    const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.wav` : soundFile(alarm.sound);
+    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, appBlockMinutes: alarm.appBlock?.minutes ?? 5, appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
     return { kind: "android", ids: [id] };
   }
   if (alarmKitAvailable()) {
@@ -105,6 +116,8 @@ export async function scheduleAlarm(
       days: alarm.days,
       label: alarm.label,
       soundName: soundFile(alarm.sound),
+      appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined,
+      appBlockMinutes: alarm.appBlock?.enabled ? alarm.appBlock.minutes ?? 5 : undefined,
       ...(at ? { timestamp: at.getTime() / 1000 } : {}),
     });
     return { kind: "alarmkit", ids: [id] };
@@ -118,6 +131,9 @@ export async function scheduleAlarm(
     sound: audioFile ?? "default",
     data: { alarmId: alarm.id },
     categoryIdentifier: "wake-up",
+    // On older iOS versions, avoid treating a wake-up alert as routine content
+    // eligible for Scheduled Summary. User notification settings still apply.
+    ...(Platform.OS === "ios" ? { interruptionLevel: "timeSensitive" as const } : {}),
   };
   try {
     if (at || !alarm.days.length)

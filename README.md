@@ -85,3 +85,13 @@ docs/                    Image prompts and native verification notes
 ```
 
 All artwork was generated with the built-in ImageGen workflow from the supplied style reference. Exact prompts and output paths are recorded in [art direction](docs/art-direction.md).
+
+## Missions and subtle Islamic styling
+
+Number trail adds ascending/descending number search. Tile recall highlights blank tiles together for two seconds, then asks you to find them in any order: Easy uses a 4×4 grid with three targets; Hard uses a 6×6 grid with eight targets. Pattern echo lights up six pads in sequence before you repeat it. The boards fill the available phone screen. All three support difficulty, independent rounds, previews, and a one-minute mission deadline. Existing Colour focus / Shape match selections automatically use Tile recall. Missions remain optional and can be combined in selection order.
+
+Fajr reminder displays one of five complete hadiths, with English and Arabic chapter headings, full Arabic narration, English translation, narrator and linked reference. It rotates after a completed wake-up; previews and timed-out attempts do not advance it. Multiple rounds show successive reminders. Reading has a five-minute limit. The Android native module must be rebuilt to support that longer limit; older binaries retain their existing one-minute deadline.
+
+The supplication mission lets each alarm choose one or more of the three existing duas. Arabic, transliteration, translation, sources and recitation counts are unchanged. Older saved alarms retain all three until edited. Preview and alarm playback use the selected subset.
+
+Built-in artwork is faceless, with small lanterns, a crescent, an arched pavilion and geometric details in the existing clay palette. See `docs/art-direction.md` for saved assets and exact generation prompts.

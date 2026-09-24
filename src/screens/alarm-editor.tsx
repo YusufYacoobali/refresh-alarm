@@ -4,6 +4,7 @@ import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-n
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
 import { AlarmSwitch } from "@/components/alarm-switch";
+import { AppBlockSettings } from "@/components/app-block-settings";
 import { Host, Slider } from "@expo/ui";
 import { Image } from "expo-image";
 import { pickWallpaper } from "@/services/wallpaper";
@@ -20,6 +21,7 @@ import {
   missionSummary,
   timeUntil,
   nextOccurrence,
+  displayTime,
 } from "@/utils/alarms";
 
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
@@ -100,7 +102,7 @@ export function AlarmEditor() {
           onChange={(hour, minute) => updateDraft({ hour, minute })}
         />
         <T variant="small" style={{ color: c.muted, textAlign: "center" }}>
-          {timeUntil(nextOccurrence(draft))} from now
+          {displayTime(draft)} {draft.hour < 12 ? "AM" : "PM"} · {timeUntil(nextOccurrence(draft))} from now
         </T>
       </View>
       <Card>
@@ -256,6 +258,7 @@ export function AlarmEditor() {
         </View>
         </>}
       </Card>
+      <AppBlockSettings alarm={draft} onChange={updateDraft} />
       <View
         style={{
           flexDirection: "row",
