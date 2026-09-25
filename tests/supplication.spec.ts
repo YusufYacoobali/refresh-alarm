@@ -33,7 +33,7 @@ test("supplication is selectable, persists with all four missions, and has no di
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Rise & shine/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByRole("button", { name: "Islamic supplication", exact: true })).toHaveAttribute("aria-pressed", "true");

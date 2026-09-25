@@ -38,7 +38,7 @@ function scheduler(version, supported, blockAuthorized = false, soundVolumeVersi
       SchedulableTriggerInputTypes: { DATE: 'date', WEEKLY: 'weekly' },
     },
     'expo-crypto': { randomUUID: () => 'native-id' }, './alarm-kit': kit, './android-alarm': null,
-    '@/utils/alarms': { nextOccurrence: () => new Date(2026, 8, 24, 7, 20, 0) },
+    '@/utils/alarms': { ALARM_NAMING_ENABLED: false, nextOccurrence: () => new Date(2026, 8, 24, 7, 20, 0) },
     '@/utils/sounds': { soundFile: id => id === 'system' ? undefined : `${id}.wav`, resolveSoundId: value => value, isCustomSound: id => id.startsWith('custom:') },
     './custom-audio': { customAudioSource: async () => ({ uri: 'file:///custom-audio/test.wav' }) },
   });
@@ -49,6 +49,7 @@ test('iOS 26 schedules the exact chosen hour/minute through AlarmKit', async () 
   assert.equal((await s.scheduleAlarm(alarm)).kind, 'alarmkit');
   assert.equal(s.calls.native[0].hour, 7);
   assert.equal(s.calls.native[0].minute, 20);
+  assert.equal(s.calls.native[0].label, 'Refresh alarm');
   assert.deepEqual(Array.from(s.calls.native[0].days), alarm.days);
   assert.equal(s.calls.notifications.length, 0);
   const at = new Date('2026-09-24T06:20:00Z');
@@ -115,6 +116,7 @@ test('older iOS fallback preserves 7:20 and requests time-sensitive delivery', a
     assert.equal(call.trigger.hour, 7);
     assert.equal(call.trigger.minute, 20);
     assert.equal(call.content.interruptionLevel, 'timeSensitive');
+    assert.equal(call.content.title, 'Refresh alarm');
   }
   assert.equal(require('../app.json').expo.ios.entitlements['com.apple.developer.usernotifications.time-sensitive'], true);
 });

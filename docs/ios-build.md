@@ -35,6 +35,31 @@ appropriate. Never ignore a patch failure or use `--ignore-scripts` for a build.
 
 ## Recover an existing Mac checkout
 
+### `Cannot find 'DaybreakAlarmSound' in scope`
+
+The volume helper is defined in
+`modules/daybreak-alarm-kit/ios/DaybreakAlarmSound.swift`. It must be present in
+the Mac checkout alongside `DaybreakAlarmKitModule.swift`. The podspec already
+includes all Swift files in that directory, but a previously generated Pods
+project may still have the source list from before this file was added.
+
+After bringing the Mac checkout up to date, close Xcode and run from the repo root:
+
+```sh
+cd ios
+pod install
+open Refresh.xcworkspace
+```
+
+If the project uses Bundler for CocoaPods, use `bundle exec pod install` instead.
+In Xcode, choose **Product > Clean Build Folder**, then build again. Confirm
+`DaybreakAlarmSound.swift` appears in the **DaybreakAlarmKit** pod target's
+**Build Phases > Compile Sources**. Do not add it to the app target; it must
+compile in the same module as `DaybreakAlarmKitModule.swift`. This refresh does
+not require deleting `ios/` or changing the sound implementation.
+
+### Full native regeneration
+
 Commit or back up any manual edits to the generated `ios/` directory first.
 This repository ignores that directory; `--clean` regenerates it and removes
 local Podfile/build-setting workarounds. Run these commands from the repo root:

@@ -29,7 +29,7 @@ test("Social group and selectable minutes persist per alarm without enabling bro
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0].appBlock)).toMatchObject({ minutes: 30, group: "social", enabled: false });
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Block distracting apps/ }).click();
   await expect(duration).toHaveValue("30");
   await expect(page.getByTestId("social-apps-summary")).toBeVisible();

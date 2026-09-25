@@ -22,10 +22,8 @@ import {
   timeUntil,
   nextOccurrence,
   displayTime,
+  ALARM_NAMING_ENABLED,
 } from "@/utils/alarms";
-
-// Keep the editor and saved labels available for future use.
-const ALARM_NAMING_ENABLED = false;
 
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
   const { reduced } = useMotion();

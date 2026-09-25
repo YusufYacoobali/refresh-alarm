@@ -73,9 +73,7 @@ test("failed storage preserves the alarm draft and allows retry", async ({
     };
   });
   await page.goto("/alarm");
-  await page
-    .getByRole("textbox", { name: "Alarm label", exact: true })
-    .fill("Keep my draft");
+  await page.getByLabel("Alarm minute", { exact: true }).press("ArrowDown");
   await page.evaluate(() => {
     (window as any).failNextSave = true;
   });
@@ -84,10 +82,10 @@ test("failed storage preserves the alarm draft and allows retry", async ({
     page.getByTestId("save-error"),
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "Alarm label", exact: true }),
-  ).toHaveValue("Keep my draft");
+    page.getByLabel("Alarm minute", { exact: true }),
+  ).toHaveAttribute("aria-valuenow", "1");
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
-  await expect(page.getByText("Keep my draft", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit alarm at 7:01 AM", exact: true })).toBeVisible();
 });
 
 test("onboarding, alarm editing, persistence, challenges, journal, and deletion", async ({
@@ -108,9 +106,7 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page.getByLabel("Alarm hour", { exact: true }).press("ArrowDown");
   for (let i = 0; i < 35; i++) await page.getByLabel("Alarm minute", { exact: true }).press("ArrowDown");
   await expect(page.getByLabel("Alarm minute", { exact: true })).toHaveAttribute("aria-valuenow", "35");
-  await page
-    .getByRole("textbox", { name: "Alarm label", exact: true })
-    .fill("A lovely morning");
+  await expect(page.getByRole("textbox", { name: "Alarm label", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /Sound & volume/ }).click();
   await page.getByRole("button", { name: /Choose sound/ }).click();
   await expect(
@@ -133,21 +129,21 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
   await page.screenshot({ path: "artifacts/screenshots/03-editor.png" });
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(
-    page.getByText("A lovely morning", { exact: true }),
+    page.getByRole("button", { name: "Edit alarm at 8:35 AM", exact: true }),
   ).toBeVisible();
   await expect(
     page
       .getByRole("button", {
-        name: "Edit A lovely morning at 8:35",
+        name: "Edit alarm at 8:35 AM",
         exact: true,
       })
       .last(),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByText("A lovely morning", { exact: true }),
+    page.getByRole("button", { name: "Edit alarm at 8:35 AM", exact: true }),
   ).toBeVisible();
-  const alarmSwitch = page.getByRole("switch", { name: "Enable A lovely morning" }).last();
+  const alarmSwitch = page.getByRole("switch", { name: "Enable alarm at 8:35 AM" }).last();
   await expect(alarmSwitch).toBeChecked();
   await alarmSwitch.click();
   await expect(alarmSwitch).not.toBeChecked();
@@ -185,14 +181,14 @@ test("onboarding, alarm editing, persistence, challenges, journal, and deletion"
     .click();
   await page.getByRole("tab", { name: "Alarms" }).click();
   await page
-    .getByRole("button", { name: "Edit A lovely morning at 8:35", exact: true })
+    .getByRole("button", { name: "Edit alarm at 8:35 AM", exact: true })
     .click();
   await expect(page.getByRole("button", { name: "Delete alarm", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
-  await page.getByRole("button", { name: "More options for A lovely morning", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Delete A lovely morning", exact: true }).click();
+  await page.getByRole("button", { name: "More options for alarm at 8:35 AM", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete alarm at 8:35 AM", exact: true }).click();
   await page
-    .getByRole("button", { name: "Confirm delete A lovely morning", exact: true })
+    .getByRole("button", { name: "Confirm delete alarm at 8:35 AM", exact: true })
     .click();
   await expect(
     page.getByText("A fresh start awaits.", { exact: true }).last(),

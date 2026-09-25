@@ -117,7 +117,7 @@ test("visual games fill the phone and every pad remains onscreen", async ({ page
 test("chosen duas survive preview, save and reload and only chosen duas run", async ({ page }) => {
   await seed(page);
   await page.goto("/alarms");
-  await page.getByRole("button", { name: /^Edit Fresh focus/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await page.getByRole("button", { name: "No missions", exact: true }).click();

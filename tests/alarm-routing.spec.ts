@@ -28,7 +28,7 @@ for (const destination of ["Home", "Journal", "editor"]) {
   test(`the ringing wallpaper takes over ${destination} without opening the Alarms tab`, async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/alarms$/);
-    if (destination === "editor") await page.getByRole("button", { name: /^Edit Wake now/ }).click();
+    if (destination === "editor") await page.getByRole("button", { name: /^Edit alarm at/ }).click();
     else await page.getByRole("tab", { name: destination, exact: true }).click();
     await page.clock.fastForward(60_000);
     await expect(page).toHaveURL(/\/ringing\?/);

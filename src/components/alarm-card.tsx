@@ -12,6 +12,8 @@ import {
   repeatLabel,
   alarmMissions,
   missionLabel,
+  ALARM_NAMING_ENABLED,
+  alarmDisplayLabel,
 } from "@/utils/alarms";
 import { useApp } from "@/state/app-state";
 export function AlarmCard({
@@ -27,6 +29,7 @@ export function AlarmCard({
 }) {
   const { edit, saveAlarm, duplicateAlarm, deleteAlarm, busy: saving } = useApp();
   const busy = saving || interactionDisabled;
+  const description = alarmDisplayLabel(alarm);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const acting = useRef(false);
   async function act(action: () => Promise<void>) {
@@ -57,7 +60,7 @@ export function AlarmCard({
             edit(alarm);
             router.push("/alarm");
           }}
-          label={`Edit ${alarm.label} at ${displayTime(alarm)}`}
+          label={`Edit ${description}`}
           accessibilityActions={onMove ? [{ name: "moveUp", label: "Move alarm up" }, { name: "moveDown", label: "Move alarm down" }] : undefined}
           onAccessibilityAction={event => {
             if (event.nativeEvent.actionName === "moveUp") onMove?.(-1);
@@ -66,9 +69,9 @@ export function AlarmCard({
           style={{ flex: 1 }}
           disabled={busy}
         >
-          <T variant="small" style={{ color: featured ? c.lavender : c.muted }}>
+          {(featured || ALARM_NAMING_ENABLED) && <T variant="small" style={{ color: featured ? c.lavender : c.muted }}>
             {featured ? "YOUR NEXT ALARM" : alarm.label}
-          </T>
+          </T>}
           <View
             style={{
               flexDirection: "row",
@@ -97,7 +100,7 @@ export function AlarmCard({
             void saveAlarm({ ...alarm, enabled: value }).catch(() => haptic("error"))
           }
           disabled={busy}
-          label={`Enable ${alarm.label}`}
+          label={`Enable ${description}`}
           testID={`toggle-${alarm.id}`}
         />
       </View>
@@ -125,18 +128,18 @@ export function AlarmCard({
           <T variant="small" style={{ color: c.lavender, fontSize: 10 }}>
             {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
           </T>
-          <AlarmActionsMenu label={alarm.label} disabled={busy}
+          <AlarmActionsMenu label={description} disabled={busy}
             onDuplicate={() => { setConfirmDelete(false); void act(() => duplicateAlarm(alarm)); }}
             onDelete={() => { haptic("medium"); setConfirmDelete(true); }} />
         </View>
       </View>
       {confirmDelete && <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.line, gap: 8 }}>
-        <T variant="small" accessibilityLiveRegion="polite">Delete “{alarm.label}” and cancel its scheduled alarm?</T>
+        <T variant="small" accessibilityLiveRegion="polite">Delete {description} and cancel its scheduled alarm?</T>
         <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
-          <Tap label={`Keep ${alarm.label}`} disabled={busy} onPress={() => setConfirmDelete(false)}>
+          <Tap label={`Keep ${description}`} disabled={busy} onPress={() => setConfirmDelete(false)}>
             <View style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}><T variant="label">Keep alarm</T></View>
           </Tap>
-          <Tap label={`Confirm delete ${alarm.label}`} disabled={busy} haptic={false} onPress={() => void act(() => deleteAlarm(alarm))}>
+          <Tap label={`Confirm delete ${description}`} disabled={busy} haptic={false} onPress={() => void act(() => deleteAlarm(alarm))}>
             <View style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}><T variant="label" style={{ color: c.danger }}>Delete</T></View>
           </Tap>
         </View>

@@ -36,7 +36,7 @@ test("simple editor saves individual volume, fade and mission preferences", asyn
   const alarm = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0]);
   expect(alarm).toMatchObject({ volume: .45, volumeRampSeconds: 120, silentMissions: false });
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Sound & volume/ }).click();
   await expect(slider).toHaveValue("45");
   await expect(page.getByRole("button", { name: "2 min", exact: true })).toHaveAttribute("aria-pressed", "true");

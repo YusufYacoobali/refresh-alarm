@@ -3,7 +3,7 @@ import * as Notifications from "expo-notifications";
 import * as Crypto from "expo-crypto";
 import AlarmKit from "./alarm-kit";
 import AndroidAlarm from "./android-alarm";
-import { Alarm, Registration, nextOccurrence } from "@/utils/alarms";
+import { Alarm, Registration, nextOccurrence, ALARM_NAMING_ENABLED } from "@/utils/alarms";
 import { soundFile, resolveSoundId, isCustomSound } from "@/utils/sounds";
 import { customAudioSource } from "./custom-audio";
 
@@ -61,6 +61,7 @@ export async function scheduleAlarm(
   at?: Date,
   reuse?: Registration,
 ): Promise<Registration> {
+  const label = ALARM_NAMING_ENABLED ? alarm.label : "Refresh alarm";
   if (Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && !alarmKitAvailable())
     throw new Error("This iPhone needs an updated Refresh build with system alarm support. Your alarm has not been enabled.");
   const permission = await requestPermission();
@@ -98,7 +99,7 @@ export async function scheduleAlarm(
     const id = reuse?.kind === "android" ? reuse.ids[0] : Crypto.randomUUID();
     const sound = resolveSoundId(alarm.sound);
     const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.wav` : soundFile(alarm.sound);
-    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, appBlockMinutes: alarm.appBlock?.minutes ?? 5, appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
+    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, appBlockMinutes: alarm.appBlock?.minutes ?? 5, appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
     return { kind: "android", ids: [id] };
   }
   if (alarmKitAvailable()) {
@@ -116,7 +117,7 @@ export async function scheduleAlarm(
       hour: alarm.hour,
       minute: alarm.minute,
       days: alarm.days,
-      label: alarm.label,
+      label,
       soundName: soundFile(alarm.sound),
       volume: alarm.volume,
       appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined,
@@ -129,7 +130,7 @@ export async function scheduleAlarm(
   const audioFile = soundFile(alarm.sound);
   const channelId = audioFile ? `alarm-${resolveSoundId(alarm.sound)}-v1` : "alarms";
   const content: Notifications.NotificationContentInput = {
-    title: alarm.label,
+    title: label,
     body: "Time to wake up.",
     sound: audioFile ?? "default",
     data: { alarmId: alarm.id },

@@ -67,7 +67,7 @@ test("mission sound preference survives saving and reopening the editor", async 
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await expect(toggle).not.toBeChecked();
 });

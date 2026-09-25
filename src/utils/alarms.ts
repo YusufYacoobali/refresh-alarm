@@ -4,6 +4,11 @@ import { selectedSupplications, supplications, type SupplicationId } from "./sup
 import type { SoundId } from "./sounds";
 export { sounds, soundName };
 export type { SoundId };
+// Keep saved names and their editor available, but hide naming throughout the UI.
+export const ALARM_NAMING_ENABLED = false;
+export function alarmDisplayLabel(alarm: Pick<Alarm, "label" | "hour" | "minute">) {
+  return ALARM_NAMING_ENABLED ? alarm.label : `alarm at ${displayTime(alarm)} ${alarm.hour < 12 ? "AM" : "PM"}`;
+}
 export type Challenge = "none" | "math" | "memory" | "shake" | "supplication" | "number_order" | "color_focus" | "sequence" | "fajr_reminder";
 export type Mission = {
   kind: Exclude<Challenge, "none">;

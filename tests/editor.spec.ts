@@ -14,7 +14,7 @@ test("wheel editing saves multiple missions with individual difficulties and sno
   await wheel.hover();
   await page.mouse.wheel(0, 80);
   await expect(page.getByLabel("Alarm minute", { exact: true })).toHaveAttribute("aria-valuenow", "2");
-  await page.getByLabel("Alarm label", { exact: true }).fill("My mission morning");
+  await expect(page.getByLabel("Alarm label", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /More options/ }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
@@ -35,7 +35,7 @@ test("wheel editing saves multiple missions with individual difficulties and sno
   expect(alarm.snooze).toBe(0);
   expect(alarm.missions).toEqual([{ kind: "math", difficulty: "bright" }, { kind: "memory", difficulty: "gentle" }, { kind: "shake", difficulty: "bright" }]);
   await page.reload();
-  await page.getByRole("button", { name: "Edit My mission morning at 8:02", exact: true }).click();
+  await page.getByRole("button", { name: "Edit alarm at 8:02 PM", exact: true }).click();
   await page.getByRole("button", { name: /More options/ }).click();
   await expect(page.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: /Wake-up missions/ }).click();

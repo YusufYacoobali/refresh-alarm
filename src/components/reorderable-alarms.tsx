@@ -10,7 +10,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import { AlarmCard } from "./alarm-card";
 import { useMotion } from "./motion";
 import { haptic } from "@/services/haptics";
-import { Alarm, orderAlarms } from "@/utils/alarms";
+import { Alarm, orderAlarms, alarmDisplayLabel } from "@/utils/alarms";
 import { colors } from "@/theme";
 
 const GAP = 16;
@@ -121,7 +121,8 @@ export function ReorderableAlarms({ alarms, busy, onReorder }: {
     try {
       await onReorder(next);
       haptic("light");
-      AccessibilityInfo.announceForAccessibility(`${alarms.find(a => a.id === moved)?.label ?? "Alarm"} moved to position ${next.indexOf(moved) + 1}`);
+      const movedAlarm = alarms.find(a => a.id === moved);
+      AccessibilityInfo.announceForAccessibility(`${movedAlarm ? alarmDisplayLabel(movedAlarm) : "Alarm"} moved to position ${next.indexOf(moved) + 1}`);
     } catch {
       haptic("error"); // The shared error layer reports failed saves.
     } finally { setPending(null); }

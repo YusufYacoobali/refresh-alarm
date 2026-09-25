@@ -35,7 +35,7 @@ async function solveMath(page: Page) {
 test("rounds are independent, saved, and used by mission previews", async ({ page }) => {
   await seed(page);
   await page.goto("/alarms");
-  await page.getByRole("button", { name: /^Edit Round test/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByTestId("rounds-memory")).toHaveValue("3");
@@ -48,7 +48,7 @@ test("rounds are independent, saved, and used by mission previews", async ({ pag
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Round test/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByTestId("rounds-memory")).toHaveValue("4");

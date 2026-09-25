@@ -14,7 +14,7 @@ async function seed(page: Page, rounds = 1, cursor = 0) {
 test('Fajr mission persists selection and previews without consuming the rotation', async ({ page }) => {
   await seed(page);
   await page.goto('/alarms');
-  await page.getByRole('button', { name: /^Edit Fajr/ }).click();
+  await page.getByRole('button', { name: /^Edit alarm at/ }).click();
   await page.getByRole('button', { name: /Wake-up missions/ }).click();
   await page.getByRole('button', { name: /Choose missions/ }).click();
   await expect(page.getByRole('button', { name: 'Fajr reminder', exact: true })).toHaveAttribute('aria-pressed', 'true');

@@ -38,6 +38,7 @@ import {
   memoryDeck,
   alarmMissions,
   missionRounds,
+  ALARM_NAMING_ENABLED,
   Mission,
   challengeNames,
 } from "@/utils/alarms";
@@ -160,9 +161,9 @@ export function Ringing() {
             ? "TRY YOUR FRESH START"
             : "YOUR FRESH START IS HERE"}
         </T>
-        <T variant="heading" style={{ marginTop: 22 }}>
+        {ALARM_NAMING_ENABLED && <T variant="heading" style={{ marginTop: 22 }}>
           {alarm.label}
-        </T>
+        </T>}
         <T style={{ color: c.muted, marginTop: 6 }}>Your day is waiting.</T>
         <View
           style={{
