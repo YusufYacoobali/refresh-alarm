@@ -6,21 +6,24 @@ import { colors } from "@/theme";
 export type AlarmActionsMenuProps = {
   label: string;
   disabled: boolean;
+  onPreview: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 };
 
-export function AlarmActionsMenu({ label, disabled, onDuplicate, onDelete }: AlarmActionsMenuProps) {
+export function AlarmActionsMenu({ label, disabled, onPreview, onDuplicate, onDelete }: AlarmActionsMenuProps) {
   return (
     <View pointerEvents={disabled ? "none" : "auto"} style={{ opacity: disabled ? 0.45 : 1 }}>
       <MenuView
         shouldOpenOnLongPress={false}
         actions={[
+          { id: "preview", title: "Preview full alarm", image: "play.fill", attributes: { disabled } },
           { id: "duplicate", title: "Duplicate", image: "doc.on.doc", attributes: { disabled } },
           { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true, disabled } },
         ]}
         onPressAction={({ nativeEvent }) => {
           if (disabled) return;
+          if (nativeEvent.event === "preview") onPreview();
           if (nativeEvent.event === "duplicate") onDuplicate();
           if (nativeEvent.event === "delete") onDelete();
         }}

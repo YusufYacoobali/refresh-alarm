@@ -149,7 +149,7 @@ export function Ringing() {
       >
         {isPreview && (
           <Tap
-            onPress={() => goHome()}
+            onPress={() => router.canGoBack() ? router.back() : goHome()}
             label="Close alarm preview"
             style={{ position: "absolute", right: 24, top: insets.top + 20 }}
           >
@@ -188,7 +188,7 @@ export function Ringing() {
         <View style={{ flex: 1, minHeight: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
         </View>
         <View style={{ width: "100%", gap: 16 }}>
-        <AlarmSound alarm={alarm} preview={isPreview} ringing immediate={reminder === "1"} />
+        <AlarmSound alarm={alarm} preview={isPreview} playPreview ringing immediate={reminder === "1"} />
           <Button
             title={
               alarmMissions(alarm).length === 0 ? "Hello, new day" : "Wake up my mind"
@@ -542,7 +542,7 @@ export function ChallengeScreen() {
   const [roundIndex, setRoundIndex] = useState(0);
   const [duaIndex, setDuaIndex] = useState(0);
   const [fajrStart] = useState(() => fajrReminderIndex(data.fajrReminderIndex));
-  const readingFajr = (isPreview ? kind : alarm && alarmMissions(alarm)[missionIndex]?.kind) === "fajr_reminder";
+  const readingFajr = (isPreview && kind ? kind : alarm && alarmMissions(alarm)[missionIndex]?.kind) === "fajr_reminder";
   const step = `${missionIndex}:${roundIndex}:${duaIndex}`;
   const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds, duaIds }, readingFajr ? 300_000 : 60_000);
   const silent = alarm?.silentMissions ?? data.silentMissions ?? true;

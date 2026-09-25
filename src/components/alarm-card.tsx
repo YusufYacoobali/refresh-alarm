@@ -129,6 +129,11 @@ export function AlarmCard({
             {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
           </T>
           <AlarmActionsMenu label={description} disabled={busy}
+            onPreview={() => {
+              setConfirmDelete(false);
+              haptic("light");
+              router.push({ pathname: "/ringing", params: { id: alarm.id, preview: "1" } });
+            }}
             onDuplicate={() => { setConfirmDelete(false); void act(() => duplicateAlarm(alarm)); }}
             onDelete={() => { haptic("medium"); setConfirmDelete(true); }} />
         </View>

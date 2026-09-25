@@ -4,7 +4,7 @@ import { Icon } from "./icon";
 import { colors as c, fonts } from "@/theme";
 import type { AlarmActionsMenuProps } from "./alarm-actions-menu";
 
-export function AlarmActionsMenu({ label, disabled, onDuplicate, onDelete }: AlarmActionsMenuProps) {
+export function AlarmActionsMenu({ label, disabled, onPreview, onDuplicate, onDelete }: AlarmActionsMenuProps) {
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
@@ -27,7 +27,7 @@ export function AlarmActionsMenu({ label, disabled, onDuplicate, onDelete }: Ala
         display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", opacity: disabled ? .45 : 1 }}
       onClick={() => {
         const rect = trigger.current!.getBoundingClientRect();
-        setPosition({ top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 112)), right: Math.max(8, window.innerWidth - rect.right) });
+        setPosition({ top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 156)), right: Math.max(8, window.innerWidth - rect.right) });
       }}>
       <Icon name="ellipsis-vertical" size={21} color={c.muted} />
     </button>
@@ -45,13 +45,13 @@ export function AlarmActionsMenu({ label, disabled, onDuplicate, onDelete }: Ala
       <div ref={menu} role="menu" aria-label={`Options for ${label}`} onClick={event => event.stopPropagation()}
         style={{ position: "absolute", ...position, width: 180, padding: 4, borderRadius: 14,
           background: c.surface, border: `1px solid ${c.line}`, boxShadow: "0 8px 30px #0006" }}>
-        {(["Duplicate", "Delete"] as const).map(action => <button key={action} type="button" role="menuitem"
-          aria-label={`${action} ${label}`} disabled={disabled}
-          onClick={() => { close(); if (action === "Duplicate") onDuplicate(); else onDelete(); }}
+        {(["Preview full alarm", "Duplicate", "Delete"] as const).map(action => <button key={action} type="button" role="menuitem"
+          aria-label={action === "Preview full alarm" ? `Preview full ${label}` : `${action} ${label}`} disabled={disabled}
+          onClick={() => { close(); if (action === "Preview full alarm") onPreview(); else if (action === "Duplicate") onDuplicate(); else onDelete(); }}
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
             minHeight: 44, border: 0, borderRadius: 10, padding: "0 12px", background: "transparent",
             color: action === "Delete" ? c.danger : c.text, fontFamily: fonts.medium, fontSize: 14, cursor: "pointer" }}>
-          {action}<Icon name={action === "Delete" ? "trash-outline" : "copy-outline"} size={18} color={action === "Delete" ? c.danger : c.muted} />
+          {action}<Icon name={action === "Preview full alarm" ? "play-outline" : action === "Delete" ? "trash-outline" : "copy-outline"} size={18} color={action === "Delete" ? c.danger : c.muted} />
         </button>)}
       </div>
     </div>}
