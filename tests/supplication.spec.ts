@@ -9,7 +9,7 @@ async function seed(page: Page, withMath = false) {
       version: 1, onboarded: true, theme: "serene", journal: [], completions: [],
       alarms: [{ id: "duas", hour: 7, minute: 0, days: [], label: "Morning duas", enabled: true,
         sound: "system", challenge: "supplication", difficulty: "gentle", snooze: 0,
-        missions: [{ kind: "supplication", difficulty: "gentle" }, ...(withMath ? [{ kind: "math", difficulty: "gentle" }] : [])],
+        missions: [{ kind: "supplication", difficulty: "gentle", rounds: 3 }, ...(withMath ? [{ kind: "math", difficulty: "gentle" }] : [])],
         nextAt: +new Date(2026, 8, 17, 7, 0), registration: { kind: "preview", ids: [] } }],
     }));
   }, withMath);
@@ -27,6 +27,8 @@ test("supplication is selectable, persists with all four missions, and has no di
     await page.getByRole("button", { name, exact: true }).click();
   }
   await expect(page.getByRole("button", { name: "Islamic supplication Easy", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("rounds-supplication")).toHaveCount(0);
+  await expect(page.getByTestId("rounds-math")).toBeVisible();
   await page.getByRole("button", { name: "Use 4 missions", exact: true }).click();
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
@@ -43,6 +45,7 @@ test("three separate duas require 1, 3 and 3 recitations before completing the a
   await seed(page);
   await page.goto("/challenge?id=duas");
   await expect(page.getByTestId("dua-title")).toHaveText("Upon waking");
+  await expect(page.getByTestId("mission-round")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Turn mission sound on", exact: true })).toBeVisible();
   await expect(page.getByTestId("dua-arabic")).toHaveCSS("font-family", "AmiriQuran");
   expect(await page.evaluate(() => document.fonts.check('30px AmiriQuran', 'الْحَمْدُ'))).toBe(true);

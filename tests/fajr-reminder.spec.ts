@@ -19,6 +19,7 @@ test('Fajr mission persists selection and previews without consuming the rotatio
   await page.getByRole('button', { name: /Choose missions/ }).click();
   await expect(page.getByRole('button', { name: 'Fajr reminder', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Fajr reminder Hard', exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('rounds-fajr_reminder')).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview Fajr reminder', exact: true }).click();
   await expect(page.getByTestId('hadith-chapter')).toHaveText(fajrReminders[0].chapterTitle);
   await page.getByRole('button', { name: 'I’ve read it', exact: true }).click();
@@ -31,16 +32,19 @@ test('Fajr mission persists selection and previews without consuming the rotatio
   await expect(page.getByTestId('hadith-reference')).toHaveText(`${fajrReminders[1].reference} ↗`);
 });
 
-test('all five full hadiths and chapters render and rotation wraps on completion', async ({ page }) => {
+test('legacy round counts are ignored and hadiths rotate once per completed alarm', async ({ page }) => {
   await seed(page, 5, 4);
-  await page.goto('/challenge?id=fajr');
   for (let n = 0; n < 5; n++) {
+    await page.goto('/challenge?id=fajr');
+    await expect(page.getByTestId('mission-round')).toHaveCount(0);
     const hadith = fajrReminders[(n + 4) % 5];
     await expect(page.getByTestId('hadith-chapter')).toHaveText(hadith.chapterTitle);
     await expect(page.getByTestId('hadith-arabic')).toHaveText(hadith.arabic);
     await expect(page.getByTestId('hadith-translation')).toHaveText(hadith.translation);
     await expect(page.getByTestId('hadith-reference')).toHaveAttribute('href', hadith.url);
     await page.getByRole('button', { name: 'I’ve read it', exact: true }).click();
+    await expect(page.getByText('First win of the day.')).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('daybreak.state.v1')!).fajrReminderIndex)).toBe(n % 5);
   }
   await expect(page.getByText('First win of the day.')).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('daybreak.state.v1')!).fajrReminderIndex)).toBe(4);

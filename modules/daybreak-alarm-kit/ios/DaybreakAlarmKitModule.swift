@@ -55,13 +55,13 @@ public class DaybreakAlarmKitModule: Module {
       guard #available(iOS 26.0, *) else { throw RefreshAppBlockShared.failure("App blocking with system alarms requires iOS 26 or later.") }
       try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
     }
-    AsyncFunction("chooseBlockedApps") { (encoded: String, group: String, promise: Promise) in
+    AsyncFunction("chooseBlockedApps") { (encoded: String, _: String, promise: Promise) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
         promise.reject(RefreshAppBlockShared.failure("Open Refresh to choose apps.")); return
       }
       let selection = (try? RefreshAppBlockShared.selection(encoded)) ?? FamilyActivitySelection()
       var controller: UIViewController?
-      let picker = RefreshAppBlockPicker(selection: selection, social: group == "social") { chosen in
+      let picker = RefreshAppBlockPicker(selection: selection) { chosen in
         guard let presented = controller else { return }
         controller = nil
         presented.dismiss(animated: true)

@@ -551,7 +551,7 @@ export function ChallengeScreen() {
   useEffect(() => { advancing.current = false; }, [missionIndex, roundIndex]);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
-  const missions: Mission[] = isPreview && kind && kind !== "none" && Object.hasOwn(challengeNames, kind) ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ rounds: Number(rounds) }), ...(kind === "supplication" ? { duaIds: selectedSupplications(duaIds?.split(",")).map(d => d.id) } : {}) }] : alarmMissions(alarm);
+  const missions: Mission[] = isPreview && kind && kind !== "none" && Object.hasOwn(challengeNames, kind) ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ kind, rounds: Number(rounds) }), ...(kind === "supplication" ? { duaIds: selectedSupplications(duaIds?.split(",")).map(d => d.id) } : {}) }] : alarmMissions(alarm);
   const mission = missions[missionIndex];
   const duas = selectedSupplications(mission?.duaIds);
   const totalRounds = missionRounds(mission);

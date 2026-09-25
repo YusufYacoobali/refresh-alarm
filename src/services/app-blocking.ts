@@ -13,9 +13,10 @@ export async function requestAppBlockAccess() {
   if (!blocker?.requestAppBlockAccess) throw new Error("Install an updated Refresh build to use app blocking.");
   await blocker.requestAppBlockAccess();
 }
-export async function chooseIOSBlockedApps(selection?: string, group: "social" | "custom" = "custom") {
+export async function chooseIOSBlockedApps(selection?: string) {
   if (!AlarmKit?.chooseBlockedApps) throw new Error("App selection is unavailable in this build.");
-  return AlarmKit.chooseBlockedApps(selection ?? "", group);
+  // Keep the second bridge argument for compatibility with installed clients.
+  return AlarmKit.chooseBlockedApps(selection ?? "", "custom");
 }
 export async function installedBlockableApps() {
   if (!AndroidAlarm?.blockableApps) throw new Error("App selection is unavailable in this build.");

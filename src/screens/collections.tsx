@@ -22,7 +22,7 @@ import {
   IconName,
 } from "@/components/ui";
 import { useApp } from "@/state/app-state";
-import { Mission, alarmMissions, missionDescription, missionLabel, missionRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
+import { Mission, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
 import { selectedSupplications, supplications } from "@/utils/supplications";
@@ -103,7 +103,7 @@ export function Challenges() {
     if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
   }
   return <Screen style={{ gap: 22 }}>
-    <Heading title="Get past snooze" subtitle="Choose your missions, difficulty, and rounds." />
+    <Heading title="Get past snooze" subtitle="Choose what helps you start your morning." />
     <Card style={{ padding: 16, gap: 8 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>{selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
       <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
@@ -136,14 +136,13 @@ export function Challenges() {
               </Tap>;
             })}
           </>}
-          {item.id !== "supplication" && item.id !== "fajr_reminder" && <>
+          {missionSupportsRounds(item.id) && <>
           <T variant="eyebrow" style={{ color: c.muted }}>DIFFICULTY</T>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {(["gentle", "bright"] as const).map(level => <Tap key={level} label={`${item.name} ${level === "gentle" ? "Easy" : "Hard"}`} selected={mission.difficulty === level} style={{ flex: 1 }} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, difficulty: level } : m))}>
               <View style={{ padding: 12, borderRadius: 16, backgroundColor: mission.difficulty === level ? c.lavender : c.raised, alignItems: "center" }}><T variant="label" style={{ color: mission.difficulty === level ? c.ink : c.muted }}>{level === "gentle" ? "Easy" : "Hard"}</T></View>
             </Tap>)}
           </View>
-          </>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <T variant="label">Rounds</T>
             <Host matchContents colorScheme="dark" seedColor={c.lavender} accessibilityLabel={`${item.name} rounds`}>
@@ -157,8 +156,9 @@ export function Challenges() {
               </Picker>
             </Host>
           </View>
-          <T variant="small" style={{ color: c.peach }}>Per round: {missionDescription(item.id, mission.difficulty, mission.duaIds)}</T>
-          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: String(missionRounds(mission)), duaIds: mission.duaIds?.join(",") } })}>
+          </>}
+          <T variant="small" style={{ color: c.peach }}>{missionSupportsRounds(item.id) ? "Per round: " : ""}{missionDescription(item.id, mission.difficulty, mission.duaIds)}</T>
+          <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: missionSupportsRounds(item.id) ? String(missionRounds(mission)) : undefined, duaIds: mission.duaIds?.join(",") } })}>
             <T variant="small" style={{ color: c.lavender }}>Try this mission →</T>
           </Tap>
         </View>}

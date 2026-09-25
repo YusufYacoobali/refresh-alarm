@@ -8,12 +8,14 @@ export type Challenge = "none" | "math" | "memory" | "shake" | "supplication" | 
 export type Mission = {
   kind: Exclude<Challenge, "none">;
   difficulty: "gentle" | "bright";
-  /** Older saved missions play one round. */
+  /** Challenge rounds; ignored for Fajr reminder and supplication. */
   rounds?: number;
   duaIds?: SupplicationId[];
 };
 export const MAX_MISSION_ROUNDS = 10;
-export function missionRounds(mission?: Pick<Mission, "rounds">) {
+export const missionSupportsRounds = (kind?: Mission["kind"]) => kind !== "fajr_reminder" && kind !== "supplication";
+export function missionRounds(mission?: Pick<Mission, "rounds"> & Partial<Pick<Mission, "kind">>) {
+  if (!missionSupportsRounds(mission?.kind)) return 1;
   const rounds = mission?.rounds ?? 1;
   return Number.isInteger(rounds) && rounds >= 1 && rounds <= MAX_MISSION_ROUNDS ? rounds : 1;
 }
@@ -81,7 +83,12 @@ export const challengeNames: Record<Challenge, string> = {
   fajr_reminder: "Fajr reminder",
 };
 export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">): Mission[] {
-  return alarm.missions ?? (alarm.challenge === "none" ? [] : [{ kind: alarm.challenge, difficulty: alarm.difficulty }]);
+  const missions = alarm.missions ?? (alarm.challenge === "none" ? [] : [{ kind: alarm.challenge, difficulty: alarm.difficulty }]);
+  return missions.map(mission => {
+    if (missionSupportsRounds(mission.kind)) return mission;
+    const { rounds: _rounds, ...selection } = mission;
+    return selection;
+  });
 }
 export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">) {
   const missions = alarmMissions(alarm);

@@ -18,7 +18,7 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
   const [search, setSearch] = useState("");
   const available = appBlockingAvailable();
   const minutes = alarm.appBlock?.minutes ?? 5;
-  const group = alarm.appBlock?.group ?? (alarm.appBlock?.count ? "custom" : "social");
+  const group = Platform.OS === "ios" ? "custom" : alarm.appBlock?.group ?? (alarm.appBlock?.count ? "custom" : "social");
   function updateBlock(patch: Partial<NonNullable<Alarm["appBlock"]>>) {
     onChange({ appBlock: { enabled: false, selection: "", count: 0, ...alarm.appBlock, minutes, group, ...patch } });
   }
@@ -41,7 +41,7 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
   }
   async function choose() {
     if (Platform.OS === "ios") {
-      const result = await chooseIOSBlockedApps(alarm.appBlock?.selection, group);
+      const result = await chooseIOSBlockedApps(alarm.appBlock?.selection);
       if (result) updateBlock({ ...result, enabled: result.count > 0 });
     } else {
       const installed = await installedBlockableApps();
@@ -63,10 +63,10 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
       <T>Give yourself a scroll-free start.</T>
       <T variant="small" style={{ color: c.muted }}>Blocks your chosen apps for {minutes} minutes from when this alarm rings. Finishing missions early keeps the block running. A snoozed alarm starts a new block when it rings.</T>
       <T>Apps to block</T>
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      {Platform.OS !== "ios" && <View style={{ flexDirection: "row", gap: 8 }}>
         <Chip title="Social" active={group === "social"} onPress={() => changeGroup("social")} />
         <Chip title="Custom apps" active={group === "custom"} onPress={() => changeGroup("custom")} />
-      </View>
+      </View>}
       {group === "social" && <T variant="small" testID="social-apps-summary" style={{ color: c.lavender }}>{SOCIAL_APPS.map(app => app.name).join(" · ")}</T>}
       <T>Block duration</T>
       <Host style={{ minHeight: 44, width: "100%" }} colorScheme="dark" seedColor={c.lavender} accessibilityLabel="App block duration">
@@ -79,13 +79,13 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
           <AlarmSwitch testID="app-block-enabled" label="Enable app blocking" value={alarm.appBlock?.enabled ?? false} disabled={working || (!alarm.appBlock?.enabled && (!authorized || !alarm.appBlock?.count))} onValueChange={enabled => updateBlock({ enabled })} />
         </Row>
         {!authorized && <>
-          <T variant="small" style={{ color: c.muted }}>{Platform.OS === "ios" ? "Allow Screen Time access, then choose the apps for your group in Apple’s picker." : "Refresh uses accessibility access to detect when a chosen app opens and cover it during your block. It does not read screen content or send app activity off your phone. Enable Refresh app blocking in Accessibility settings."}</T>
+          <T variant="small" style={{ color: c.muted }}>{Platform.OS === "ios" ? "Allow Screen Time access, then choose apps or categories in Apple’s picker." : "Refresh uses accessibility access to detect when a chosen app opens and cover it during your block. It does not read screen content or send app activity off your phone. Enable Refresh app blocking in Accessibility settings."}</T>
           <Button title={Platform.OS === "ios" ? "Allow Screen Time access" : "Agree & open accessibility settings"} loading={working} onPress={() => void run(requestAppBlockAccess)} />
         </>}
-        {authorized && <Button title={group === "social" ? (Platform.OS === "ios" ? "Choose Social apps" : "Use Social apps") : "Choose apps to block"} loading={working} onPress={() => void run(choose)} />}
+        {authorized && <Button title={group === "social" ? "Use Social apps" : "Choose apps to block"} loading={working} onPress={() => void run(choose)} />}
         {!!alarm.appBlock?.count && <T variant="small" style={{ color: c.muted }}>{alarm.appBlock.count} apps or categories selected.</T>}
         {group === "social" && Platform.OS === "android" && !!alarm.appBlock?.count && <T variant="small" style={{ color: c.muted }}>Tap Use Social apps again to include newly added or installed apps.</T>}
-        {Platform.OS === "ios" && <T variant="small" style={{ color: c.muted }}>{group === "social" ? "Choose the apps listed above in Apple’s picker to save your Social group. You can select Social and add video apps from Entertainment. " : ""}iOS controls Screen Time delivery, so blocking or unblocking may be delayed.</T>}
+        {Platform.OS === "ios" && <T variant="small" style={{ color: c.muted }}>iOS controls Screen Time delivery, so blocking or unblocking may be delayed.</T>}
         {apps && <View style={{ gap: 10 }}>
           <T variant="small" style={{ color: c.muted }}>Common social apps are preselected. Add any others you want to block.</T>
           <TextInput accessibilityLabel="Search installed apps" placeholder="Search apps" placeholderTextColor={c.muted} value={search} onChangeText={setSearch} style={{ color: c.text, backgroundColor: c.raised, padding: 12, borderRadius: 12 }} />

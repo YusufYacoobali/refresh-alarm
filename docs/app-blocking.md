@@ -1,6 +1,6 @@
 # App blocking
 
-Each alarm has **Block distracting apps**, a **Social** group (Instagram, YouTube,
+Each alarm has **Block distracting apps**. Android offers a **Social** group (Instagram, YouTube,
 Reddit, TikTok, Facebook, Threads, X, Snapchat, Pinterest, LinkedIn, Tumblr, Twitch,
 and Discord), and a Custom apps option. The duration is selectable: **5, 10,
 15, 30, or 60 minutes**. After granting access and choosing apps,
@@ -35,10 +35,10 @@ social app automatically. OEM accessibility behavior needs device testing.
 ## iPhone
 
 Requires iOS 26+ with this app's AlarmKit module. Family Controls individual
-authorization and Apple's app/category picker produce opaque tokens. The Social
-setup opens that picker with instructions to select social apps and add video apps
-such as YouTube and Twitch from Entertainment. iOS requires the user to select
-these apps, so the Android package preset is not used to fabricate iOS tokens.
+authorization and Apple's app/category picker produce opaque tokens. **Choose apps
+to block** opens Apple's categorized picker directly. The former Social option only
+changed instructions, without filtering or preselecting anything, so it is removed
+on iOS. Existing saved selections are preserved, including those labelled Social.
 Selections are per alarm. Managed Settings uses a separate named store for each
 alarm registration, so finishing one alarm cannot release another's shields.
 
@@ -60,7 +60,8 @@ terminated, and overnight delivery on a signed iPhone before release.
 ### Build requirements
 
 - Rebuild both native apps; an OTA update or Expo Go cannot add these services.
-  Native app-block API version 2 adds selectable durations and Social picker setup.
+  Native app-block API version 2 adds selectable durations. The legacy picker group
+  argument is retained for bridge compatibility; iOS always uses the standard picker.
   An older build cannot silently save a longer block that still lasts five minutes.
 - In Apple Developer, enable Family Controls for `com.yacoobali.alarm` and
   `com.yacoobali.alarm.appblock`, and configure

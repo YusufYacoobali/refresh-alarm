@@ -91,16 +91,14 @@ test("a new round resets the minute and timing out restarts from round one", asy
   await expect(page.getByTestId("mission-round")).toHaveText("Round 1 of 3");
 });
 
-test("each supplication round includes all three duas with fresh recitation counts", async ({ page }) => {
+test("legacy supplication rounds run the selected duas once before the next mission", async ({ page }) => {
   await seed(page, "supplication", 2);
   await page.goto("/challenge?id=rounds");
-  for (let round = 1; round <= 2; round++) {
-    await expect(page.getByTestId("mission-round")).toHaveText(`Round ${round} of 2`);
-    await expect(page.getByTestId("dua-title")).toHaveText("Upon waking");
-    for (const count of [1, 3, 3]) {
-      if (count === 3) await expect(page.getByTestId("dua-repetitions")).toHaveText("Recite 3 times · 0/3 completed");
-      for (let i = 0; i < count; i++) await page.getByRole("button", { name: "I’ve recited it", exact: true }).click();
-    }
+  await expect(page.getByTestId("mission-round")).toHaveCount(0);
+  await expect(page.getByTestId("dua-title")).toHaveText("Upon waking");
+  for (const count of [1, 3, 3]) {
+    if (count === 3) await expect(page.getByTestId("dua-repetitions")).toHaveText("Recite 3 times · 0/3 completed");
+    for (let i = 0; i < count; i++) await page.getByRole("button", { name: "I’ve recited it", exact: true }).click();
   }
   await expect(page.getByText("Mission 2 of 2", { exact: true })).toBeVisible();
   await expect(page.getByTestId("math-question")).toBeVisible();

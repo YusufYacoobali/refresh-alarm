@@ -239,6 +239,18 @@ test("mission rounds default to one and persist independently in summaries", () 
   assert.doesNotThrow(() => validateAlarm({ ...alarm, missions: [{ ...missions[0], rounds: 10 }] }));
 });
 
+test("Fajr and duas run once even when saved missions contain old round counts", () => {
+  for (const kind of ["fajr_reminder", "supplication"] as const) {
+    const mission = { kind, difficulty: "gentle" as const, rounds: 5 };
+    const saved = { ...alarm, missions: [mission] };
+    assert.doesNotThrow(() => validateAlarm(saved));
+    assert.equal(missionRounds(mission), 1);
+    assert.equal(alarmMissions(saved)[0].rounds, undefined);
+    assert.doesNotMatch(missionSummary(saved), /rounds/);
+    assert.equal(mission.rounds, 5, "reading old settings does not mutate stored data");
+  }
+});
+
 test("alarm volume, gradual volume and reminder validate without breaking older alarms", () => {
   assert.doesNotThrow(() => validateAlarm(alarm));
   assert.doesNotThrow(() => validateAlarm({ ...alarm, volume: .8, volumeRampSeconds: 60, missionReminder: true }));
