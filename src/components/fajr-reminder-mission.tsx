@@ -16,9 +16,9 @@ export function FajrReminderMission({ index, isExpired, onDone }: {
       <T variant="small" style={{ color: c.peach }}>Reminder {position + 1} of {fajrReminders.length} · Chapter {hadith.chapter}</T>
       {hadith.book && <T variant="small" style={{ color: c.muted }}>{hadith.book}</T>}
       <T testID="hadith-chapter" variant="heading">{hadith.chapterTitle}</T>
-      <T selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 24, lineHeight: 42, writingDirection: "rtl", textAlign: "right", color: c.peach }}>{hadith.chapterArabic}</T>
+      <T selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 12, lineHeight: 24, writingDirection: "rtl", textAlign: "right", color: c.peach }}>{hadith.chapterArabic}</T>
     </View>
-    <T testID="hadith-arabic" selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 30, lineHeight: 52, letterSpacing: 0, writingDirection: "rtl", textAlign: "right", paddingVertical: 4 }}>{hadith.arabic}</T>
+    <T testID="hadith-arabic" selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 12, lineHeight: 24, letterSpacing: 0, writingDirection: "rtl", textAlign: "right", paddingVertical: 4 }}>{hadith.arabic}</T>
     <T selectable style={{ color: c.peach, lineHeight: 25 }}><WithHonorific text={hadith.narrator} /></T>
     <T testID="hadith-translation" selectable style={{ color: c.muted, lineHeight: 27 }}><WithHonorific text={hadith.translation} /></T>
     <View style={{ gap: 12 }}>

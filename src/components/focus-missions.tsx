@@ -68,7 +68,7 @@ export function NumberTrail({ difficulty, onDone }: Props) {
     <Board columns={hard ? 3 : 2}>{numbers.map(n => {
       const found = hard ? n > expected : n < expected;
       return <Pad key={n} label={`Number ${n}`} disabled={found} onPress={() => choose(n)} color={found ? c.green : c.lavender}>
-        <T style={{ fontSize: 36, color: found ? c.green : c.text }}>{found ? "✓" : n}</T>
+        <T numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 36, lineHeight: 48, alignSelf: "stretch", textAlign: "center", paddingHorizontal: 8, color: found ? c.green : c.text }}>{found ? "✓" : n}</T>
       </Pad>;
     })}</Board>
   </View>;
