@@ -24,6 +24,9 @@ import {
   displayTime,
 } from "@/utils/alarms";
 
+// Keep the editor and saved labels available for future use.
+const ALARM_NAMING_ENABLED = false;
+
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
   const { reduced } = useMotion();
   const { width } = useWindowDimensions();
@@ -109,6 +112,7 @@ export function AlarmEditor() {
         <Row
           icon="repeat-outline"
           title="Repeat"
+          last={!ALARM_NAMING_ENABLED && !repeatOpen}
           value={
             draft.days.length === 5 &&
             [1, 2, 3, 4, 5].every((d) => draft.days.includes(d))
@@ -180,7 +184,7 @@ export function AlarmEditor() {
             </View>
           </Animated.View>
         )}
-        <Row icon="pricetag-outline" title="Label">
+        {ALARM_NAMING_ENABLED && <Row icon="pricetag-outline" title="Label">
           <TextInput
             accessibilityLabel="Alarm label"
             value={draft.label}
@@ -196,7 +200,7 @@ export function AlarmEditor() {
               minHeight: 34,
             }}
           />
-        </Row>
+        </Row>}
       </Card>
       <Card>
         <Row

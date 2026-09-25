@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { AlarmCard } from "@/components/alarm-card";
 import { ReorderableAlarms } from "@/components/reorderable-alarms";
-import { colors as c, art } from "@/theme";
+import { colors as c, art, fonts } from "@/theme";
 import { useApp } from "@/state/app-state";
 import { nextOccurrence, nextAlarmAt, timeUntil, orderAlarms } from "@/utils/alarms";
 import { Float } from "@/components/motion";
@@ -225,6 +225,7 @@ export function Alarms() {
       <Heading
         title="Your mornings"
         subtitle={next ? `Next alarm in ${timeUntil(next, now)}` : "No upcoming alarms"}
+        subtitleStyle={next ? { fontFamily: fonts.heavy, fontSize: 24, lineHeight: 32, color: c.peach } : undefined}
         right={
           <CircleButton
             icon="add"

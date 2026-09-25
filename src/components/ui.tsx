@@ -255,17 +255,19 @@ export function Screen({
 export function Heading({
   title,
   subtitle,
+  subtitleStyle,
   right,
 }: {
   title: string;
   subtitle?: string;
+  subtitleStyle?: TextProps["style"];
   right?: React.ReactNode;
 }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <View style={{ flex: 1 }}>
         <T variant="title">{title}</T>
-        {subtitle && <T style={{ color: c.muted, marginTop: 6 }}>{subtitle}</T>}
+        {subtitle && <T style={[{ color: c.muted, marginTop: 6 }, subtitleStyle]}>{subtitle}</T>}
       </View>
       {right}
     </View>
