@@ -12,6 +12,21 @@ On iOS, opening a real alarm transfers audio from the system alert to Expo Audio
 
 Legacy placeholder IDs resolve to actual sounds: morning/night → Lo-fi, forest → Rooster, ocean → Wake Up, rain → Short Ring, chimes → Digital Beep. Existing saved alarms remain readable; edit/save an existing native alarm to register its new sound.
 
+## iOS system alarm volume
+
+The scheduler passes the saved volume to AlarmKit's native bridge. Because [AlarmKit sound configuration](https://developer.apple.com/documentation/activitykit/alertconfiguration/alertsound) exposes a named sound rather than per-alarm gain, `DaybreakAlarmSound` creates a PCM WAV in Library/Sounds with gain applied to every sample before scheduling. A 40% selection scales the original samples by 0.4, including the very first sample on the Apple alarm screen. iOS still controls the device's overall alert output level; this is relative gain, not an absolute loudness setting. Bundled and imported sounds use the same processing, including snoozes and mission backups. Device default with reduced volume uses Digital Beep, matching the foreground fallback; unspecified/100% volume preserves the original system tone. Gradual volume remains an in-app playback feature.
+
+Prepared sounds are cached by source content and gain, and atomically published after the WAV header is finalized. Copies stay available for scheduled alarms and never overwrite another alarm's audio. An old native bridge rejects reduced-volume saves rather than silently ignoring the setting. Install a rebuilt iOS client, then edit/save existing alarms to replace their previous system registrations.
+
+JavaScript bridge regression: `node --test scripts/ios-alarm.test.cjs`. On macOS, run the actual native PCM checks:
+
+```sh
+swiftc modules/daybreak-alarm-kit/ios/DaybreakAlarmSound.swift scripts/ios-alarm-volume/main.swift -o /tmp/refresh-alarm-volume-test
+/tmp/refresh-alarm-volume-test
+```
+
+These check stereo sample gain from the first frame, distinct volume copies, cache reuse, unchanged source audio, and invalid/missing input. On a physical iPhone, compare the same tone at 100%, 40%, and 10% with the same device alert volume, Refresh terminated, and the phone locked. Repeat after changing a saved alarm, with two alarms sharing a tone at different volumes, with an import, and with snooze/mission backup. Verify foreground handoff separately; a browser cannot establish Apple system audio delivery.
+
 ## Imported sounds
 
 Open Alarm sounds → Custom → Import audio. The system file picker accepts audio files up to 50 MB. Refresh checks the recording can be decoded, saves it locally, selects it, and offers preview playback. When editing an alarm, tap Use this sound and save the alarm.

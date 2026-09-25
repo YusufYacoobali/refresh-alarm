@@ -18,6 +18,7 @@ struct DaybreakAlarmInput: Record {
   @Field var label: String = "Rise & shine"
   @Field var timestamp: Double? = nil
   @Field var soundName: String? = nil
+  @Field var volume: Double? = nil
   @Field var appBlockSelection: String? = nil
   @Field var appBlockMinutes: Int = 5
 }
@@ -45,6 +46,7 @@ public class DaybreakAlarmKitModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("DaybreakAlarmKit")
+    Function("soundVolumeVersion") { 1 }
     Function("appBlockVersion") { 2 }
     Function("appBlockStatus") { () -> [String: Any] in
       ["authorized": AuthorizationCenter.shared.authorizationStatus == .approved, "activeUntil": RefreshAppBlockShared.refreshAll()]
@@ -145,13 +147,22 @@ public class DaybreakAlarmKitModule: Module {
       )
       // Snooze is a new fixed alarm. No countdown / Live Activity extension is needed.
       let sound: AlertConfiguration.AlertSound
-      if let name = input.soundName {
-        let library = try FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: false).appendingPathComponent("Sounds").appendingPathComponent(name)
+      if let volume = input.volume {
+        guard volume.isFinite, (0.1...1).contains(volume) else { throw Self.error("Invalid alarm volume.") }
+      }
+      // The opaque system tone cannot be attenuated. Match the foreground
+      // player's bundled beep when a lower volume is explicitly selected.
+      let name = input.soundName ?? ((input.volume ?? 1) < 1 ? "daybreak_digital_beep.wav" : nil)
+      if let name = name {
+        let folder = try FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Sounds", isDirectory: true)
+        let library = folder.appendingPathComponent(name)
         let bundled = name.hasPrefix("daybreak_") && Bundle.main.url(forResource: name, withExtension: nil) != nil
         let imported = name.hasPrefix("refresh_custom_") && FileManager.default.fileExists(atPath: library.path)
         guard name.hasSuffix(".wav"), !name.contains("/"), bundled || imported
         else { throw Self.error("This alarm sound is missing. Import it again or choose another sound.") }
-        sound = .named(name)
+        let source = bundled ? Bundle.main.url(forResource: name, withExtension: nil)! : library
+        let prepared = try DaybreakAlarmSound.prepare(source: source, volume: input.volume ?? 1, folder: folder)
+        sound = .named(prepared)
       } else { sound = .default }
       // Show only the system stop control and use it to open the mission flow;
       // stopping the system sound must not mark the app's mission complete.

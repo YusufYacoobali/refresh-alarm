@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
 export type AlarmKitBridge = {
+  soundVolumeVersion?(): number;
   appBlockVersion?(): number;
   appBlockStatus?(): { authorized: boolean; activeUntil: number };
   requestAppBlockAccess?(): Promise<void>;
@@ -16,6 +17,7 @@ export type AlarmKitBridge = {
     days: number[];
     label: string;
     soundName?: string;
+    volume?: number;
     timestamp?: number;
     appBlockSelection?: string;
     appBlockMinutes?: number;

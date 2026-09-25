@@ -21,12 +21,13 @@ function load(file, mocks, globals = {}) {
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const alarm = { id: 'wake', hour: 7, minute: 20, days: [1,2,3,4,5], label: 'Wake', sound: 'system', enabled: true };
 
-function scheduler(version, supported, blockAuthorized = false) {
+function scheduler(version, supported, blockAuthorized = false, soundVolumeVersion = 1) {
   const calls = { native: [], notifications: [] };
   const kit = supported === null ? null : {
     isSupported: () => supported, requestAuthorization: async () => 'authorized',
     appBlockStatus: () => ({ authorized: blockAuthorized, activeUntil: 0 }),
     appBlockVersion: () => 2,
+    soundVolumeVersion: soundVolumeVersion === null ? undefined : () => soundVolumeVersion,
     schedule: async input => calls.native.push(input), getAlarms: async () => [],
   };
   const result = load('src/services/scheduler.ts', {
@@ -38,8 +39,8 @@ function scheduler(version, supported, blockAuthorized = false) {
     },
     'expo-crypto': { randomUUID: () => 'native-id' }, './alarm-kit': kit, './android-alarm': null,
     '@/utils/alarms': { nextOccurrence: () => new Date(2026, 8, 24, 7, 20, 0) },
-    '@/utils/sounds': { soundFile: () => undefined, resolveSoundId: value => value, isCustomSound: () => false },
-    './custom-audio': {},
+    '@/utils/sounds': { soundFile: id => id === 'system' ? undefined : `${id}.wav`, resolveSoundId: value => value, isCustomSound: id => id.startsWith('custom:') },
+    './custom-audio': { customAudioSource: async () => ({ uri: 'file:///custom-audio/test.wav' }) },
   });
   return { ...result, calls };
 }
@@ -53,6 +54,31 @@ test('iOS 26 schedules the exact chosen hour/minute through AlarmKit', async () 
   const at = new Date('2026-09-24T06:20:00Z');
   await s.scheduleAlarm(alarm, at);
   assert.equal(s.calls.native[1].timestamp, at.getTime() / 1000);
+});
+test('native alarms receive the chosen volume for first delivery, snooze and mission backups', async () => {
+  const s = scheduler('26.0', true);
+  for (const sound of ['system', 'daybreak_lofi', 'custom:imported']) {
+    for (const volume of [.1, .4, .8, 1, undefined]) {
+      const selected = { ...alarm, sound, volume };
+      await s.scheduleAlarm(selected);
+      await s.scheduleAlarm(selected, new Date('2026-09-25T07:25:00Z'));
+      for (const call of s.calls.native.slice(-2)) {
+        assert.equal(call.volume, volume);
+        assert.equal(call.soundName, sound === 'system' ? undefined : `${sound}.wav`);
+      }
+    }
+  }
+  assert.equal(s.calls.notifications.length, 0);
+});
+test('older native clients cannot silently ignore a reduced alarm volume', async () => {
+  for (const version of [null, 0]) {
+    const s = scheduler('26.0', true, false, version);
+    await assert.rejects(s.scheduleAlarm({ ...alarm, volume: .4 }), /updated Refresh iOS build/);
+    assert.equal(s.calls.native.length, 0);
+    await s.scheduleAlarm(alarm);
+    await s.scheduleAlarm({ ...alarm, volume: 1 });
+    assert.equal(s.calls.native.length, 2);
+  }
 });
 test('app blocking requires permission and passes the selected apps to the native alarm scheduler', async () => {
   const selected = { ...alarm, appBlock: { enabled: true, selection: 'opaque-selection', count: 1 } };

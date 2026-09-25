@@ -269,7 +269,11 @@ export function AlarmEditor() {
       >
         <Icon name="information-circle-outline" size={16} color={c.faint} />
         <T variant="small" style={{ color: c.faint, flex: 1 }}>
-          {draft.sound === "system" ? "Uses your device’s default alarm sound." : `${soundName(draft.sound)} plays when this alarm rings.`}
+          {draft.sound === "system"
+            ? Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && (draft.volume ?? 1) < 1
+              ? "Uses Digital Beep to apply your chosen volume on the iPhone alarm screen."
+              : "Uses your device’s default alarm sound."
+            : `${soundName(draft.sound)} plays when this alarm rings.`}
         </T>
       </View>
     </Screen>

@@ -102,6 +102,8 @@ export async function scheduleAlarm(
     return { kind: "android", ids: [id] };
   }
   if (alarmKitAvailable()) {
+    if (alarm.volume !== undefined && alarm.volume < 1 && AlarmKit!.soundVolumeVersion?.() !== 1)
+      throw new Error("Install the updated Refresh iOS build to apply your chosen volume on the system alarm screen, then save this alarm again.");
     const id = reuse?.kind === "alarmkit" ? reuse.ids[0] : Crypto.randomUUID();
     if (
       reuse?.kind === "alarmkit" &&
@@ -116,6 +118,7 @@ export async function scheduleAlarm(
       days: alarm.days,
       label: alarm.label,
       soundName: soundFile(alarm.sound),
+      volume: alarm.volume,
       appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined,
       appBlockMinutes: alarm.appBlock?.enabled ? alarm.appBlock.minutes ?? 5 : undefined,
       ...(at ? { timestamp: at.getTime() / 1000 } : {}),
