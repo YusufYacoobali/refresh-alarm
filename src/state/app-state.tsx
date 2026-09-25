@@ -57,7 +57,7 @@ export function newAlarm(): Alarm {
     id: Crypto.randomUUID(),
     hour: 7,
     minute: 0,
-    days: [1, 2, 3, 4, 5],
+    days: [0, 1, 2, 3, 4, 5, 6],
     label: "Rise & shine",
     enabled: true,
     sound: "lofi",

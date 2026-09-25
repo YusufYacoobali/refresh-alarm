@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { withHapticFeedback } from "@/services/haptics";
-import { View, TextInput, Linking, Platform, AppState } from "react-native";
+import { View, TextInput, Linking, AppState } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import Animated from "react-native-reanimated";
 import { useSceneMotion } from "@/components/motion";
 import { ClayMotion } from "@/components/clay-motion";
-import AndroidAlarm from "@/services/android-alarm";
 import { AndroidAlarmSettings } from "@/components/android-alarm-settings";
 import {
   Screen,
@@ -25,7 +24,6 @@ import { useApp, newAlarm } from "@/state/app-state";
 import {
   permissionStatus,
   requestPermission,
-  alarmKitAvailable,
 } from "@/services/scheduler";
 
 export function Sleep() {
@@ -365,23 +363,6 @@ export function Settings() {
           onPress={() => router.push("/challenges")}
           last
         />
-      </Card>
-      <Card style={{ padding: 20, gap: 12 }}>
-        <T variant="label">Made for your mornings</T>
-        <T variant="small" style={{ color: c.muted }}>
-          {alarmKitAvailable()
-            ? "System alarms are powered by Apple AlarmKit. They can sound through Silent mode and Focus."
-            : AndroidAlarm
-              ? "Android alarm-clock scheduling wakes your phone, rings continuously, and opens your wake-up screen when locked. Complete your missions or snooze to stop the sound."
-            : Platform.OS === "web"
-              ? "This browser is a visual preview. Demo alarms only run while the page stays open. Install a mobile build for scheduled device alerts."
-              : "This build uses local notifications. Notification settings, Focus, and battery restrictions may silence or delay them. On iOS 26+, install a Refresh native build to use AlarmKit."}
-        </T>
-        <T variant="small" style={{ color: c.muted }}>
-          Wake-up challenges run inside the app. The operating system’s Stop
-          button remains available. Snoozing in Refresh schedules a new alarm
-          for your selected interval.
-        </T>
       </Card>
       <Button
         title="Schedule a test alarm"
