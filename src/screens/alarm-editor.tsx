@@ -28,7 +28,8 @@ import {
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
   const { reduced } = useMotion();
   const { width } = useWindowDimensions();
-  const size = Math.min(264, width - 48), center = size / 2, radius = center - 23;
+  // Leave clearance around the full wheel rectangle, including its faded corners.
+  const size = Math.min(312, width - 32), center = size / 2, radius = center - 23;
   return <View testID="time-dial" style={{ width: size, height: size, alignSelf: "center", alignItems: "center", justifyContent: "center" }}>
     <View pointerEvents="none" style={{ position: "absolute", width: size - 28, height: size - 28, borderRadius: center - 14, borderWidth: 17, borderColor: "#26263F", boxShadow: "inset 3px 3px 9px #8E81BC55, 0 0 30px #BDB0F510" }} />
     {Array.from({ length: 30 }, (_, i) => {

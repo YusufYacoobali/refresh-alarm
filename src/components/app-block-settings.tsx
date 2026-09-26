@@ -79,7 +79,8 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
           <AlarmSwitch testID="app-block-enabled" label="Enable app blocking" value={alarm.appBlock?.enabled ?? false} disabled={working || (!alarm.appBlock?.enabled && (!authorized || !alarm.appBlock?.count))} onValueChange={enabled => updateBlock({ enabled })} />
         </Row>
         {!authorized && <>
-          <T variant="small" style={{ color: c.muted }}>{Platform.OS === "ios" ? "Allow Screen Time access, then choose apps or categories in Apple’s picker." : "Refresh uses accessibility access to detect when a chosen app opens and cover it during your block. It does not read screen content or send app activity off your phone. Enable Refresh app blocking in Accessibility settings."}</T>
+          <T variant="small" style={{ color: c.muted }}>{Platform.OS === "ios" ? "Allow Screen Time access, then choose apps or categories in Apple’s picker." : "Refresh uses accessibility access to detect when a chosen app opens and cover it during your block. It does not read screen content or send app activity off your phone."}</T>
+          {Platform.OS === "android" && <T variant="small" style={{ color: c.muted }}>In Accessibility settings, open Downloaded apps or Installed apps (the name varies by phone), then Refresh app blocking. Turn on Use Refresh app blocking (or Allow service) and confirm Allow. Return here and choose Use Social apps or Choose apps to block.</T>}
           <Button title={Platform.OS === "ios" ? "Allow Screen Time access" : "Agree & open accessibility settings"} loading={working} onPress={() => void run(requestAppBlockAccess)} />
         </>}
         {authorized && <Button title={group === "social" ? "Use Social apps" : "Choose apps to block"} loading={working} onPress={() => void run(choose)} />}

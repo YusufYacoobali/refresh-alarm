@@ -151,11 +151,14 @@ export function CircleButton({
 export function Card({
   children,
   style,
+  animated = true,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  animated?: boolean;
 }) {
   const { reduced } = useMotion();
+  if (!animated) return <View style={[s.card, style]}>{children}</View>;
   return <Animated.View entering={reduced ? undefined : FadeIn.duration(220)} layout={reduced ? undefined : LinearTransition.duration(220)} style={[s.card, style, { transitionProperty: ["backgroundColor", "borderColor", "opacity"], transitionDuration: reduced ? 0 : 180 }]}>{children}</Animated.View>;
 }
 export function Row({
@@ -206,6 +209,7 @@ export function Screen({
   scroll = true,
   safeTop = false,
   scrollResetKey,
+  removeClippedSubviews,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -213,6 +217,7 @@ export function Screen({
   /** Headerless screens own their safe area; native headers already provide it. */
   safeTop?: boolean;
   scrollResetKey?: number | string;
+  removeClippedSubviews?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
@@ -221,6 +226,7 @@ export function Screen({
   return scroll ? (
     <Animated.ScrollView
       ref={scrollRef}
+      removeClippedSubviews={removeClippedSubviews}
       entering={reduced ? undefined : FadeIn.duration(220)}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentInsetAdjustmentBehavior={safeTop ? "never" : "automatic"}

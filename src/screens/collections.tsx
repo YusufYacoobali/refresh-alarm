@@ -102,16 +102,18 @@ export function Challenges() {
     setSelected(missions);
     if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
   }
-  return <Screen style={{ gap: 22 }}>
+  // Expanding rows move offscreen siblings. Keep their Android native views
+  // attached and their touch bounds in sync with the current Yoga layout.
+  return <Screen style={{ gap: 22 }} removeClippedSubviews={false}>
     <Heading title="Get past snooze" subtitle="Choose what helps you start your morning." />
-    <Card style={{ padding: 16, gap: 8 }}>
+    <Card animated={Platform.OS !== "android"} style={{ padding: 16, gap: 8 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>{selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
       <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
     </Card>
     {challenges.map(item => {
       const index = selected.findIndex(m => m.kind === item.id);
       const mission = selected[index];
-      return <Card key={item.id} style={{ borderColor: mission ? c.lavender : c.line }}>
+      return <Card key={item.id} animated={Platform.OS !== "android"} style={{ borderColor: mission ? c.lavender : c.line }}>
         <Tap label={item.name} selected={!!mission} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}>
             <ClayMotion name={item.id} size={88} />
@@ -145,7 +147,9 @@ export function Challenges() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <T variant="label">Rounds</T>
-            <Host matchContents colorScheme="dark" seedColor={c.lavender} accessibilityLabel={`${item.name} rounds`}>
+            <Host matchContents={Platform.OS !== "android"}
+              style={Platform.OS === "android" ? { width: 148, height: 56 } : undefined}
+              colorScheme="dark" seedColor={c.lavender} accessibilityLabel={`${item.name} rounds`}>
               <Picker selectedValue={missionRounds(mission)} testID={`rounds-${item.id}`}
                 onValueChange={(rounds) => {
                   haptic("selection");
@@ -165,7 +169,7 @@ export function Challenges() {
       </Card>;
     })}
     <Tap label="No missions" selected={!selected.length} onPress={() => change([])}>
-      <Card style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 12 }}><Icon name="sunny-outline" /><View style={{ flex: 1 }}><T variant="label">No missions</T><T variant="small" style={{ color: c.muted }}>Just tap to dismiss.</T></View>{!selected.length && <Icon name="checkmark-circle" />}</Card>
+      <Card animated={Platform.OS !== "android"} style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 12 }}><Icon name="sunny-outline" /><View style={{ flex: 1 }}><T variant="label">No missions</T><T variant="small" style={{ color: c.muted }}>Just tap to dismiss.</T></View>{!selected.length && <Icon name="checkmark-circle" />}</Card>
     </Tap>
     <T variant="small" style={{ color: c.faint }}>Missions run inside Refresh. Your device’s alarm controls remain available.</T>
     {editing && <Button title={selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} onPress={() => router.back()} icon="checkmark" />}
