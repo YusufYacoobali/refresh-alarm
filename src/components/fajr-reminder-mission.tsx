@@ -12,15 +12,10 @@ export function FajrReminderMission({ index, isExpired, onDone }: {
   const position = fajrReminderIndex(index), hadith = fajrReminders[position];
   const done = useRef(false);
   return <View style={{ gap: 20 }}>
-    <View style={{ gap: 10 }}>
-      <T variant="small" style={{ color: c.peach }}>Reminder {position + 1} of {fajrReminders.length} · Chapter {hadith.chapter}</T>
-      {hadith.book && <T variant="small" style={{ color: c.muted }}>{hadith.book}</T>}
-      <T testID="hadith-chapter" variant="heading">{hadith.chapterTitle}</T>
-      <T selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 12, lineHeight: 24, writingDirection: "rtl", textAlign: "right", color: c.peach }}>{hadith.chapterArabic}</T>
-    </View>
-    <T testID="hadith-arabic" selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 12, lineHeight: 24, letterSpacing: 0, writingDirection: "rtl", textAlign: "right", paddingVertical: 4 }}>{hadith.arabic}</T>
-    <T selectable style={{ color: c.peach, lineHeight: 25 }}><WithHonorific text={hadith.narrator} /></T>
-    <T testID="hadith-translation" selectable style={{ color: c.muted, lineHeight: 27 }}><WithHonorific text={hadith.translation} /></T>
+    <T variant="small" style={{ color: c.peach }}>Reminder {position + 1} of {fajrReminders.length}</T>
+    <T testID="hadith-arabic" selectable accessibilityLanguage="ar" style={{ fontFamily: fonts.arabic, fontSize: 16, lineHeight: 30, letterSpacing: 0, writingDirection: "rtl", textAlign: "right", paddingVertical: 4 }}>{hadith.arabic}</T>
+    <T variant="heading" selectable style={{ color: c.peach }}><WithHonorific text={hadith.narrator} /></T>
+    <T testID="hadith-translation" variant="heading" selectable><WithHonorific text={hadith.translation} /></T>
     <View style={{ gap: 12 }}>
       {hadith.grade && <T variant="small" style={{ color: c.muted }}>Grade: {hadith.grade}</T>}
       <Link href={hadith.url} target="_blank" asChild><T testID="hadith-reference" style={{ color: c.lavender, textDecorationLine: "underline" }}>{hadith.reference} ↗</T></Link>
