@@ -14,6 +14,7 @@
         "com.apple.developer.usernotifications.time-sensitive": true
       },
       "infoPlist": {
+        "UIBackgroundModes": [],
         "NSAlarmKitUsageDescription": "Refresh uses alarms to wake you at the times you choose, even when your iPhone is silenced or in Focus.",
         "NSMotionUsageDescription": "Refresh uses motion only during your shake-to-wake challenge.",
         "ITSAppUsesNonExemptEncryption": false
@@ -70,7 +71,8 @@
         {
           "recordAudioAndroid": false,
           "microphonePermission": false,
-          "enableBackgroundPlayback": true
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       "expo-asset",

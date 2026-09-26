@@ -13,6 +13,28 @@ xcrun swift --version
 
 ## Fixes in this checkout
 
+### App Review 2.5.4: background audio
+
+`app.json` explicitly clears `UIBackgroundModes` and disables background playback
+and recording in the `expo-audio` plugin. In-app audio stops when the app becomes
+inactive; the alarm screen resumes it when the app becomes active again. Scheduled
+iOS alarms and mission timeout alarms still use AlarmKit. Android alarms use the
+separate native `AlarmRingService`.
+
+This requires a new iOS binary. EAS production builds generate the native project
+from this config and increment the build number automatically. For an existing
+Mac/Xcode project, run `npx expo prebuild --platform ios --no-install` to apply the
+config before archiving. Verify the app target's Info.plist has no `audio` entry in
+`UIBackgroundModes`, and that Audio, AirPlay, and Picture in Picture is unchecked
+under Background Modes. Check the archived app's Info.plist too.
+
+On a physical device, verify a scheduled alarm while locked, opening the ringing
+screen, leaving and reopening that screen, and a mission timeout while backgrounded.
+After opening the alarm in-app, its foreground sound no longer continues on the
+Home Screen; an already scheduled mission timeout remains a system alarm.
+
+### Expo JSI compatibility
+
 `patches/expo-modules-jsi+57.1.0.patch` addresses both failures in Expo's JSI
 bridge, and `npm ci` / `npm install` apply it through `postinstall`:
 

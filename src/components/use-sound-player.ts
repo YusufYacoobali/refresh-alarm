@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { audioSources } from "@/data/audio-sources";
-import { resolveSoundId, soundName, SoundId, isCustomSound } from "@/utils/sounds";
+import { resolveSoundId, SoundId, isCustomSound } from "@/utils/sounds";
 import { customAudioSource } from "@/services/custom-audio";
 import { alarmGain } from "@/utils/alarm-playback";
 
@@ -12,13 +12,12 @@ export function useSoundPlayer() {
   const status = useAudioPlayerStatus(player);
   const [playing, setPlaying] = useState<SoundId | null>(null), [error, setError] = useState<string | null>(null);
   const revision = useRef(0);
-  const looping = useRef(false);
   const fade = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const stop = useCallback(() => {
-    revision.current++; looping.current = false;
+    revision.current++;
     clearInterval(fade.current);
     // The hook may already have released its native player during route teardown.
-    try { player.pause(); player.setActiveForLockScreen(false); } catch {}
+    try { player.pause(); } catch {}
     setPlaying(null);
   }, [player]);
   const play = useCallback(async (id: SoundId, loop = false, options?: { volume?: number; rampSeconds?: number }) => {
@@ -27,13 +26,12 @@ export function useSoundPlayer() {
     if (resolved === "system") return;
     const request = revision.current;
     try {
-      await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: loop, interruptionMode: "doNotMix" });
+      // System alarms own background delivery; this player is for in-app audio.
+      await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: "doNotMix" });
       const source = isCustomSound(resolved) ? { uri: (await customAudioSource(resolved)).uri } : audioSources[resolved];
-      if (request !== revision.current) return;
+      if (request !== revision.current || AppState.currentState !== "active") return;
       const volume = options?.volume ?? (loop ? 1 : .7), ramp = options?.rampSeconds ?? 0;
       player.replace(source); player.loop = loop; player.volume = volume * alarmGain(0, ramp);
-      looping.current = loop;
-      if (loop) player.setActiveForLockScreen(true, { title: soundName(id), artist: "Refresh alarm" });
       player.play(); setPlaying(resolved);
       if (ramp > 0) {
         const started = Date.now();
@@ -47,6 +45,6 @@ export function useSoundPlayer() {
   }, [player, stop]);
   useEffect(() => { if (status.didJustFinish || status.error) setPlaying(null); if (status.error) setError("Couldn’t play this sound. Try again."); }, [status.didJustFinish, status.error]);
   useFocusEffect(useCallback(() => () => stop(), [stop]));
-  useEffect(() => { const sub = AppState.addEventListener("change", state => { if (state !== "active" && !looping.current) stop(); }); return () => sub.remove(); }, [stop]);
+  useEffect(() => { const sub = AppState.addEventListener("change", state => { if (state !== "active") stop(); }); return () => sub.remove(); }, [stop]);
   return { play, stop, playing, error };
 }
