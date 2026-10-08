@@ -20,8 +20,15 @@ expiry lives in native storage, survives process recreation, and is checked on
 every app switch and every half-second while covered. Uninstalled apps are skipped.
 Revoking accessibility access stops enforcement without preventing recurring alarms.
 
-Setup explicitly explains what the service observes and asks the user to open
-Accessibility settings. It reads window package names only: no window-content
+On Android, **Set up app blocking** opens an **Enable App Blocking** disclosure
+with two explicit choices: **No thanks** and **Agree**. Only **Agree** opens
+Accessibility settings. Declining, tapping outside, pressing Back, or leaving the
+app closes the disclosure without requesting access. There is no timeout or saved
+consent that bypasses the dialog on a later setup attempt. Returning from settings
+checks actual authorization; agreeing alone does not enable blocking.
+
+The disclosure explains what the service observes and how it is used. The service
+reads window package names only: no window-content
 retrieval, screen capture, activity upload, or QUERY_ALL_PACKAGES permission.
 The Social preset selects installed versions of the apps listed above together,
 including supported Lite/regional variants. Tap **Use Social apps** again to refresh
@@ -73,6 +80,16 @@ terminated, and overnight delivery on a signed iPhone before release.
   and disclosure review. The service declares itself as not an accessibility tool.
 
 ### Device verification
+
+Before release, start with Accessibility access disabled. Open the disclosure and
+verify **No thanks**, outside tap, Back, and Home do not open settings or enable
+blocking. Reopen after each cancellation and confirm both choices remain visible.
+Leave it open to confirm it does not expire. Verify the full text is readable with
+large font settings and on a small screen. Tap **Agree** and confirm settings opens;
+return without granting access and confirm blocking is still unavailable. Repeat,
+grant access, return, and choose apps. Record both consent and decline/retry flows,
+plus actual blocking, for the Play Console declaration video as described in
+[Google’s disclosure guidance](https://support.google.com/googleplay/android-developer/answer/11150561?hl=en-GB).
 
 Schedule a real alarm with selected apps, leave Refresh, and open one while it
 rings. Complete missions before the selected deadline: blocking should continue. Check

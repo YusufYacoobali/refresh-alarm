@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AppState, Platform, TextInput, View } from "react-native";
 import { Host, Picker } from "@expo/ui";
 import { AlarmSwitch } from "./alarm-switch";
+import { AppBlockDisclosure } from "./app-block-disclosure";
 import { Button, Card, Chip, Row, T } from "./ui";
 import { colors as c } from "@/theme";
 import type { Alarm } from "@/utils/alarms";
@@ -16,6 +17,27 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
   const [apps, setApps] = useState<Awaited<ReturnType<typeof installedBlockableApps>> | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [showDisclosure, setShowDisclosure] = useState(false);
+  const disclosurePending = useRef(false);
+  function closeDisclosure() {
+    disclosurePending.current = false;
+    setShowDisclosure(false);
+  }
+  function requestAccess() {
+    if (working) return;
+    if (Platform.OS === "android") {
+      disclosurePending.current = true;
+      setShowDisclosure(true);
+    } else {
+      void run(requestAppBlockAccess);
+    }
+  }
+  function agreeToAccess() {
+    // Dismissal/backgrounding and repeated native click events cannot grant consent.
+    if (!disclosurePending.current || AppState.currentState !== "active") return;
+    closeDisclosure();
+    void run(requestAppBlockAccess);
+  }
   const available = appBlockingAvailable();
   const minutes = alarm.appBlock?.minutes ?? 5;
   const group = Platform.OS === "ios" ? "custom" : alarm.appBlock?.group ?? (alarm.appBlock?.count ? "custom" : "social");
@@ -30,8 +52,11 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
   const refresh = () => { try { setAuthorized(appBlockStatus().authorized); } catch { setAuthorized(false); } };
   useEffect(() => {
     refresh();
-    const listener = AppState.addEventListener("change", state => { if (state === "active") refresh(); });
-    return () => listener.remove();
+    const listener = AppState.addEventListener("change", state => {
+      if (state === "active") refresh();
+      else closeDisclosure();
+    });
+    return () => { disclosurePending.current = false; listener.remove(); };
   }, []);
   async function run(action: () => Promise<void>) {
     setWorking(true); setError(null);
@@ -81,7 +106,7 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
         {!authorized && <>
           <T variant="small" style={{ color: c.muted }}>{Platform.OS === "ios" ? "Allow Screen Time access, then choose apps or categories in Apple’s picker." : "Refresh uses accessibility access to detect when a chosen app opens and cover it during your block. It does not read screen content or send app activity off your phone."}</T>
           {Platform.OS === "android" && <T variant="small" style={{ color: c.muted }}>In Accessibility settings, open Downloaded apps or Installed apps (the name varies by phone), then Refresh app blocking. Turn on Use Refresh app blocking (or Allow service) and confirm Allow. Return here and choose Use Social apps or Choose apps to block.</T>}
-          <Button title={Platform.OS === "ios" ? "Allow Screen Time access" : "Agree & open accessibility settings"} loading={working} onPress={() => void run(requestAppBlockAccess)} />
+          <Button title={Platform.OS === "ios" ? "Allow Screen Time access" : "Set up app blocking"} loading={working} onPress={requestAccess} />
         </>}
         {authorized && <Button title={group === "social" ? "Use Social apps" : "Choose apps to block"} loading={working} onPress={() => void run(choose)} />}
         {!!alarm.appBlock?.count && <T variant="small" style={{ color: c.muted }}>{alarm.appBlock.count} apps or categories selected.</T>}
@@ -100,5 +125,6 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
       {alarm.appBlock?.enabled && !available && <Button title="Turn off app blocking" onPress={() => onChange({ appBlock: { ...alarm.appBlock!, enabled: false } })} />}
       {error && <T accessibilityLiveRegion="assertive" style={{ color: c.danger }}>{error}</T>}
     </View>}
+    {showDisclosure && <AppBlockDisclosure onAgree={agreeToAccess} onDecline={closeDisclosure} />}
   </Card>;
 }
