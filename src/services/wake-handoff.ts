@@ -62,19 +62,48 @@ export async function readNativeWakeups(data: WakeRoutingData): Promise<WakeCand
     });
   }
   let records = await AlarmKit.pendingWakeups();
+  records.forEach(validateNative);
   // Old scheduled registrations lack the new native mapping. Recover them only
   // after an actual .alerting observation, with native confirmation before write.
-  if (!records.length) {
-    for (const native of (await AlarmKit.getAlarms()).filter(a => a.state === "alerting")) {
-      const id = alarmForRegistration(data, native.id);
-      if (id) await AlarmKit.captureAlertingWakeup?.(native.id, id);
-    }
-    records = await AlarmKit.pendingWakeups();
+  // A different alarm's pending handoff must never hide an older registration.
+  let active: Awaited<ReturnType<typeof AlarmKit.getAlarms>> = [];
+  try { active = await AlarmKit.getAlarms(); }
+  catch (error) {
+    if (!records.length) throw error;
+    logWakeHandoff("handoff.observe.deferred", "", "active_lookup_failed_pending_retained");
   }
-  records.forEach(validateNative);
+  const represented = new Set(records.map(record => record.registrationId));
+  let captured = false, captureFailure: unknown;
+  for (const native of active.filter(a => a.state === "alerting")) {
+    if (represented.has(native.id)) continue;
+    const id = alarmForRegistration(data, native.id);
+    if (!id || !AlarmKit.captureAlertingWakeup) continue;
+    try {
+      await AlarmKit.captureAlertingWakeup(native.id, id);
+      represented.add(native.id); captured = true;
+    } catch (error) {
+      captureFailure = error;
+      logWakeHandoff("handoff.capture.deferred", native.id, "native_capture_failed");
+    }
+  }
+  if (captured) {
+    try {
+      const recovered = await AlarmKit.pendingWakeups();
+      recovered.forEach(validateNative);
+      // Preserve the original queue positions, update duplicate identities in
+      // place, then append recovered occurrences in native order.
+      records = [...records, ...recovered];
+    } catch (error) {
+      if (!records.length) throw error;
+      logWakeHandoff("handoff.observe.deferred", "", "capture_read_failed_pending_retained");
+    }
+  }
+  if (captureFailure && !records.length) throw captureFailure;
+  const unique = new Map<string, NativeWakeHandoff>();
+  for (const record of records) unique.set(JSON.stringify([record.registrationId, record.occurrenceId]), record);
   const timeout = await readMissionTimeout().catch(() => { logWakeHandoff("timeout.read.failed", "", "native_pending_retained"); return null; });
   const candidates: WakeCandidate[] = [];
-  for (const record of records) {
+  for (const record of unique.values()) {
     let sessionId = record.sessionId;
     const saved = data.wakeSessions?.[record.alarmId];
     if (record.source === "legacy" && saved && saved.id !== sessionId) {

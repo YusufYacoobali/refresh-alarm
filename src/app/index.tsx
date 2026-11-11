@@ -1,16 +1,16 @@
 import { Redirect } from "expo-router";
 import { useApp } from "@/state/app-state";
-import { useWakeHandoff } from "@/components/wake-handoff-router";
-import { Button, Screen, T } from "@/components/ui";
+import { useWakeHandoff, WakeHandoffError } from "@/components/wake-handoff-router";
+import { Screen, T } from "@/components/ui";
 
 export default function Index() {
   const { data, ready } = useApp();
-  const { status, retry } = useWakeHandoff();
-  if (!ready || status.state === "checking" || status.state === "pending") return null;
-  if (status.state === "error") return <Screen safeTop>
-    <T variant="heading">Couldn’t check your wake-up.</T>
-    <T>Your pending alarm is kept. Try again to resume it.</T>
-    <Button title="Retry alarm handoff" onPress={retry} />
+  const { status } = useWakeHandoff();
+  if (!ready) return null;
+  if (status.state === "checking" || status.state === "pending") return <Screen safeTop>
+    <T variant="heading">{status.state === "pending" ? "Opening your wake-up…" : "Checking your alarm…"}</T>
+    <T>Your pending alarm is kept while we prepare your screen.</T>
   </Screen>;
+  if (status.state === "error") return <Screen safeTop><WakeHandoffError /></Screen>;
   return <Redirect href={data.onboarded ? "/(tabs)/alarms" : "/onboarding"} />;
 }

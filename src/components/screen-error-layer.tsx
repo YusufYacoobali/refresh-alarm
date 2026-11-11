@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { Linking, Platform, ScrollView, View, useWindowDimensions } from "react-native";
 import { useIsFocused } from "expo-router/react-navigation";
+import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp, FadeOutDown } from "react-native-reanimated";
 import { useApp } from "@/state/app-state";
 import { colors as c } from "@/theme";
 import { useMotion } from "./motion";
 import { Button, Card, Icon, T, Tap } from "./ui";
+import { useWakeHandoff, WakeHandoffError } from "./wake-handoff-router";
 
 /** Lives inside each native screen, so a presented modal cannot cover its errors. */
 export function ScreenErrorLayer({ children }: { children: React.ReactNode }) {
   const { error, clearError } = useApp();
+  const { status } = useWakeHandoff();
+  const pathname = usePathname();
   const focused = useIsFocused();
   const { reduced } = useMotion();
   const insets = useSafeAreaInsets();
@@ -20,6 +24,14 @@ export function ScreenErrorLayer({ children }: { children: React.ReactNode }) {
   const permissionError = !!error && /permission|authorization/i.test(error);
   return <View testID="screen-error-layer" style={{ flex: 1 }}>
     {children}
+    {focused && pathname !== "/" && status.state === "error" && status.target && <View testID="wake-handoff-recovery"
+      style={{ position: "absolute", left: 16, right: 16, bottom: Math.max(insets.bottom, 16) + 12, zIndex: 101 }}>
+      <Card style={{ borderColor: c.danger, boxShadow: "0 8px 30px #00000066" }}>
+        <ScrollView style={{ maxHeight: height * .55 }} contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">
+          <WakeHandoffError />
+        </ScrollView>
+      </Card>
+    </View>}
     {focused && error && <Animated.View
       entering={reduced ? undefined : FadeInUp.duration(180)}
       exiting={reduced ? undefined : FadeOutDown.duration(140)}

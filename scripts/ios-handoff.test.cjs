@@ -206,3 +206,164 @@ test('older Android binaries distinguish a fresh day from a reminder even withou
     assert.equal((await reader(null, null, android, 'android').readNativeWakeups(data))[0].sessionId, expected);
   }
 });
+
+function mixedReader(initial, registrations, options = {}) {
+  const disk = plain(initial), captures = [], logs = [];
+  let reads = 0;
+  const saved = [alarm, { ...alarm, id: 'b', registration: { kind: 'alarmkit', ids: ['older-b'] } },
+    { ...alarm, id: 'c', registration: { kind: 'alarmkit', ids: ['older-c'] } }];
+  const kit = { isSupported: () => true,
+    pendingWakeups: async () => { reads++; if (options.rereadFailure && reads > 1) throw new Error('reread'); return plain(disk); },
+    getAlarms: async () => { if (options.lookupFailure) throw new Error('lookup'); return registrations; },
+    captureAlertingWakeup: async (registrationId, alarmId) => {
+      captures.push(registrationId);
+      if (options.captureFailure === registrationId) throw new Error('capture');
+      if (options.completed?.includes(registrationId)) return;
+      if (!disk.some(r => r.registrationId === registrationId)) disk.push({ ...handoff, alarmId, registrationId,
+        occurrenceId: `${registrationId}:morning`, sessionId: `${registrationId}:morning`, createdAt: 200 + disk.length, source: 'legacy' });
+    }, logWakeHandoff: (...args) => logs.push(args),
+  };
+  const adapter = reader(kit);
+  return { disk, captures, logs, reads: () => reads, read: async () => plain(await adapter.readNativeWakeups({ alarms: saved })), saved, kit };
+}
+test('a new active alarm already represented natively remains single and ordered', async () => {
+  const h = mixedReader([handoff], [{ id: 'primary', state: 'alerting' }]);
+  const result = await h.read();
+  assert.deepEqual(result.map(r => r.eventId), [handoff.occurrenceId]); assert.deepEqual(h.captures, []);
+});
+test('new and older alarms alerting together are independently recovered even with existing pending evidence', async () => {
+  const h = mixedReader([handoff], [{ id: 'primary', state: 'alerting' }, { id: 'older-b', state: 'alerting' }]);
+  const result = await h.read();
+  assert.deepEqual(result.map(r => r.id), ['a', 'b']); assert.deepEqual(h.captures, ['older-b']);
+  assert.equal(h.reads(), 2); assert.deepEqual(h.disk[0], handoff);
+});
+test('all older alerting registrations are captured and keep native queue order', async () => {
+  const h = mixedReader([], [{ id: 'older-b', state: 'alerting' }, { id: 'older-c', state: 'alerting' }]);
+  const result = await h.read();
+  assert.deepEqual(h.captures, ['older-b', 'older-c']); assert.deepEqual(result.map(r => r.id), ['b', 'c']);
+});
+test('an older registration already represented in pending records is not captured again', async () => {
+  const old = { ...handoff, alarmId: 'b', registrationId: 'older-b', occurrenceId: 'older-b:morning', sessionId: 'older-b:morning', source: 'legacy' };
+  const h = mixedReader([handoff, old], [{ id: 'older-b', state: 'alerting' }]);
+  assert.deepEqual((await h.read()).map(r => r.id), ['a', 'b']); assert.deepEqual(h.captures, []);
+});
+test('active-registration lookup failure preserves valid pending evidence and emits a diagnostic', async () => {
+  const h = mixedReader([handoff], [], { lookupFailure: true });
+  assert.deepEqual((await h.read()).map(r => r.eventId), [handoff.occurrenceId]);
+  assert.ok(h.logs.some(([event, , reason]) => event === 'handoff.observe.deferred' && reason === 'active_lookup_failed_pending_retained'));
+  assert.deepEqual(h.disk, [handoff]);
+});
+test('without pending evidence an active-registration lookup error remains recoverable rather than resolving empty', async () => {
+  await assert.rejects(mixedReader([], [], { lookupFailure: true }).read(), /lookup/);
+});
+test('duplicate active callbacks and duplicate native records cannot duplicate occurrence/session results', async () => {
+  const h = mixedReader([handoff, handoff], [{ id: 'older-b', state: 'alerting' }, { id: 'older-b', state: 'alerting' }]);
+  const first = await h.read(), again = await h.read();
+  assert.deepEqual(h.captures, ['older-b']); assert.equal(first.length, 2); assert.deepEqual(plain(again), plain(first));
+  assert.equal(new Set(first.map(r => r.sessionId)).size, 2);
+});
+test('deduplication retains distinct occurrences of a repeating registration and the original queue positions', async () => {
+  const tomorrow = { ...handoff, occurrenceId: 'primary:tomorrow', sessionId: 'primary:tomorrow', createdAt: 300 };
+  const h = mixedReader([handoff, tomorrow, handoff], [{ id: 'older-b', state: 'alerting' }]);
+  assert.deepEqual((await h.read()).map(r => r.eventId), [handoff.occurrenceId, tomorrow.occurrenceId, 'older-b:morning']);
+});
+test('native completion watermarks remain authoritative when a completed older registration is still reported alerting', async () => {
+  const h = mixedReader([handoff], [{ id: 'older-b', state: 'alerting' }], { completed: ['older-b'] });
+  assert.deepEqual((await h.read()).map(r => r.id), ['a']); assert.deepEqual(h.disk, [handoff]);
+});
+test('one failed legacy capture cannot hide other genuinely alerting registrations', async () => {
+  const h = mixedReader([handoff], [{ id: 'older-b', state: 'alerting' }, { id: 'older-c', state: 'alerting' }], { captureFailure: 'older-b' });
+  assert.deepEqual((await h.read()).map(r => r.id), ['a', 'c']); assert.deepEqual(h.captures, ['older-b', 'older-c']);
+  assert.ok(h.logs.some(([event]) => event === 'handoff.capture.deferred'));
+});
+test('a failed post-capture reread retains existing records for processing and can recover on the next check', async () => {
+  const options = { rereadFailure: true };
+  const h = mixedReader([handoff], [{ id: 'older-b', state: 'alerting' }], options);
+  assert.deepEqual((await h.read()).map(r => r.id), ['a']);
+  assert.ok(h.logs.some(([, , reason]) => reason === 'capture_read_failed_pending_retained'));
+  options.rereadFailure = false;
+  assert.deepEqual((await h.read()).map(r => r.id), ['a', 'b']);
+});
+test('unmatched scheduled registrations and unknown IDs never manufacture a native delivery', async () => {
+  const h = mixedReader([handoff], [{ id: 'older-b', state: 'scheduled' }, { id: 'unknown', state: 'alerting' }]);
+  assert.deepEqual((await h.read()).map(r => r.id), ['a']); assert.deepEqual(h.captures, []);
+});
+
+// Run the real root hook, coordinator, boot page and focused screen error layer
+// with an inert router. This verifies the retry UI is wired to durable resolution.
+function navigationUI(pathname = '/journal', mode = 'silent') {
+  let at = 0, timerId = 0, latestStatus, appListener, nativeListener, hook;
+  const timers = new Map(), refs = [], effects = [], calls = [], logs = [], queue = [plain(handoff)];
+  const app = { currentState: 'active', addEventListener: (_event, listener) => { appListener = listener; return { remove() {} }; } };
+  const clock = { performance: { now: () => at }, setTimeout: (callback, ms) => { const id = ++timerId; timers.set(id, { callback, at: at + ms }); return id; }, clearTimeout: id => timers.delete(id) };
+  const Coordinator = load('src/utils/wake-handoff.ts', {}, clock).WakeHandoffCoordinator;
+  const react = { createContext: () => ({}), useContext: () => ({ status: latestStatus, retry: () => hook.retry() }),
+    useRef: current => { const ref = { current }; refs.push(ref); return ref; },
+    useState: value => { latestStatus = value; return [value, next => { latestStatus = typeof next === 'function' ? next(latestStatus) : next; }]; },
+    useEffect: fn => effects.push(fn) };
+  const jsx = { Fragment: 'Fragment', jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
+  const navigate = (kind, destination, options) => {
+    calls.push({ kind, destination, options });
+    if (mode === 'throw') throw new Error('Navigator unavailable');
+    if (mode === 'commit') refs[0].current.route = { pathname: destination.pathname, ...destination.params };
+  };
+  const module = load('src/components/wake-handoff-router.tsx', {
+    react, 'react/jsx-runtime': jsx, 'react-native': { AppState: app, Platform: { OS: 'ios' } },
+    'expo-router': { router: { push: (d, o) => navigate('push', d, o), replace: (d, o) => navigate('replace', d, o) },
+      useGlobalSearchParams: () => ({}), usePathname: () => pathname, useRootNavigationState: () => ({ key: 'root' }) },
+    'expo-notifications': { addNotificationReceivedListener: () => ({ remove() {} }), addNotificationResponseReceivedListener: () => ({ remove() {} }), getLastNotificationResponseAsync: async () => null },
+    '@/services/alarm-kit': { addListener: (_event, listener) => { nativeListener = listener; return { remove() {} }; } },
+    '@/services/wake-handoff': { acknowledgeWakeup: () => assert.fail('Navigation cannot consume native evidence'), readNativeWakeups: async () => queue.map(r => ({ id: r.alarmId, eventId: r.occurrenceId, sessionId: r.sessionId, createdAt: r.createdAt, durable: true, native: true })), logWakeHandoff: (...args) => logs.push(args) },
+    '@/utils/wake-handoff': { WakeHandoffCoordinator: Coordinator }, './ui': { Button: 'Button', T: 'Text' },
+  }, { setInterval: () => 1, clearInterval() {} });
+  hook = module.useWakeHandoffRouter({ alarms: [alarm] }, true);
+  const cleanup = effects.map(effect => effect());
+  const appContext = { useApp: () => ({ data: { onboarded: true }, ready: true, error: null, clearError() {} }) };
+  const boot = load('src/app/index.tsx', { 'react/jsx-runtime': jsx, 'expo-router': { Redirect: 'Redirect' },
+    '@/state/app-state': appContext, '@/components/wake-handoff-router': module, '@/components/ui': { Screen: 'Screen', T: 'Text' } });
+  const layer = focused => load('src/components/screen-error-layer.tsx', {
+    react: { useState: initial => [initial, () => {}], useEffect() {} }, 'react/jsx-runtime': jsx,
+    'react-native': { View: 'View', ScrollView: 'ScrollView', Platform: { OS: 'ios' }, useWindowDimensions: () => ({ height: 844 }) },
+    'expo-router/react-navigation': { useIsFocused: () => focused }, 'expo-router': { usePathname: () => pathname },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    'react-native-reanimated': { __esModule: true, default: { View: 'AnimatedView' } },
+    '@/state/app-state': appContext, '@/theme': { colors: {} }, './motion': { useMotion: () => ({ reduced: true }) },
+    './ui': { Card: 'Card' }, './wake-handoff-router': module,
+  }).ScreenErrorLayer({ children: 'Existing screen' });
+  return { queue, calls, logs, boot: () => boot.default(), layer, status: () => latestStatus,
+    mode: value => { mode = value; }, retry: () => hook.retry(), native: () => nativeListener(),
+    app: state => { app.currentState = state; appListener(state); },
+    advance: ms => { const end = at + ms; for (;;) { const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0]; if (!next || next[1].at > end) break; at = next[1].at; timers.delete(next[0]); next[1].callback(); } at = end; },
+    dispose: () => cleanup.forEach(fn => fn?.()) };
+}
+function nodes(tree) {
+  if (tree == null || typeof tree !== 'object') return [];
+  if (Array.isArray(tree)) return tree.flatMap(nodes);
+  if (typeof tree.type === 'function') return nodes(tree.type(tree.props));
+  return [tree, ...nodes(tree.props?.children)];
+}
+for (const mode of ['silent', 'throw']) test(`warm ${mode} navigation failure exposes an accessible retry over the focused screen`, async () => {
+  const h = navigationUI('/journal', mode); await flush();
+  if (mode === 'silent') h.advance(5000);
+  assert.equal(h.status().state, 'error'); assert.equal(h.queue.length, 1);
+  const tree = nodes(h.layer(true)), hidden = nodes(h.layer(false));
+  assert.ok(tree.some(n => n.props.testID === 'wake-handoff-recovery'));
+  assert.ok(tree.some(n => n.props.accessibilityRole === 'alert'));
+  assert.ok(!hidden.some(n => n.props.testID === 'wake-handoff-recovery'));
+  const retry = tree.find(n => n.props.title === 'Open wake-up screen'); assert.ok(retry);
+  h.mode('commit'); retry.props.onPress(); await flush(); h.native(); await flush();
+  assert.equal(h.status().state, 'pending'); assert.equal(h.calls.length, 2);
+  assert.equal(h.calls[1].kind, 'replace'); assert.equal(h.queue.length, 1);
+  const first = h.calls[0], second = h.calls[1];
+  assert.deepEqual(plain(first.destination.params), plain(second.destination.params));
+  assert.equal(first.options.dangerouslySingular('ringing', first.destination.params), second.options.dangerouslySingular('ringing', second.destination.params));
+  assert.ok(!nodes(h.layer(true)).some(n => n.props.testID === 'wake-handoff-recovery')); h.dispose();
+});
+test('boot shows progress then a single Open wake-up screen action when the real hook navigation never commits', async () => {
+  const h = navigationUI('/', 'silent'); await flush();
+  assert.ok(h.boot()); assert.ok(nodes(h.boot()).some(n => String(n.props.children).includes('Opening your wake-up')));
+  h.advance(5000);
+  assert.equal(nodes(h.boot()).filter(n => n.props.title === 'Open wake-up screen').length, 1);
+  assert.ok(!nodes(h.layer(true)).some(n => n.props.testID === 'wake-handoff-recovery'));
+  assert.equal(h.queue.length, 1); h.dispose();
+});

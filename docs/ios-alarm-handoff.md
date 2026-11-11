@@ -1,6 +1,18 @@
 # iOS AlarmKit wake-up handoff
 
-Implemented on `v3`, following `e96550d`. No merge into `main`, dependency upgrade, entitlement change, or change to volume, audio preparation, Mystery configuration, or mission deadlines.
+Implemented on `v3`, initially following `e96550d`, with final review fixes following `dc0c2b6`. No merge into `main`, dependency upgrade, entitlement change, or change to volume, audio preparation, Mystery configuration, or mission deadlines.
+
+## Final review fixes
+
+Two further issues were confirmed in `dc0c2b6`: an accepted router call could leave an in-flight request pending forever without committing a route, and older-registration recovery was skipped whenever any native pending handoff existed.
+
+The coordinator now records the target alarm, session, occurrence, expected `/ringing` route and monotonic request start. A five-second **active-app-time** watchdog runs independently of native lookups. A return from `push`/`replace` is only a request; matching route parameters confirm success. Backgrounding cancels the timer and pauses its remaining budget. Matching commits, completion, explicit cancellation, snooze, discarded targets and superseding deliveries cancel the old watchdog. A slow commit can clear an error without issuing another request. A matching challenge already in progress keeps its mission progress.
+
+Immediate navigation exceptions and commit timeouts expose **Open wake-up screen**. The boot route renders progress rather than a blank view. The existing focused-screen error layer also shows the retry over ordinary screens and native modals; unfocused screens do not expose duplicate actions. Failure retains the native handoff and original Mystery snapshot. Polls, duplicate callbacks, route changes and resume do not automatically retry a failed request. Explicit retry takes priority over callbacks arriving during a pending lookup and replaces the destination; Expo Router's existing occurrence-specific singular option deduplicates queued actions for the same alarm/session/event.
+
+Every resolution independently checks actual AlarmKit `.alerting` registrations, even with a nonempty pending queue. Saved registration IDs identify unmatched older alarms for native `captureAlertingWakeup` confirmation. After capture, records merge by registration **and** occurrence identity, keeping original positions and appending recovered occurrences in native order. One failed capture does not skip other alarms. Lookup or post-capture reread failures preserve existing valid records and emit `handoff.observe.deferred`/`handoff.capture.deferred` diagnostics. Native completion watermarks and JavaScript completion/cancellation markers remain authoritative; elapsed schedule times never manufacture a delivery.
+
+This follow-up changes only `src/utils/wake-handoff.ts`, its unit tests, `src/components/wake-handoff-router.tsx`, `src/app/index.tsx`, `src/components/screen-error-layer.tsx`, `src/services/wake-handoff.ts`, `scripts/ios-handoff.test.cjs` and this report. There are no new native APIs, Swift edits, scheduling changes, dependencies or entitlements. It uses the durable native bridge from `dc0c2b6`; a build that predates that bridge still needs the native rebuild described below.
 
 ## Findings and evidence
 
@@ -55,7 +67,7 @@ The old UserDefaults value is imported once. Compatibility reads, including the 
 
 The root hook owns both boot and foreground resolution; index only waits for its result. Resolution is serialized, checks lifecycle again after native reads, and waits for hydration and the root navigator. Read failures retain pending evidence and present a retry on the boot route instead of silently redirecting home.
 
-Navigation is guarded until the route commits. Duplicate callbacks do not push another screen or reset challenge progress. Thrown navigation errors wait for a route change, explicit retry or app resume; polling does not repeatedly push a failed target. A silently uncommitted request also remains native-pending and can retry on resume. Independent sessions are presented in order, with the currently active session kept together.
+Navigation is guarded until the requested wake-up route commits. Duplicate callbacks do not push another screen or reset challenge progress. Thrown navigation errors and silent commit failures retain the handoff and require an explicit retry, with a visible recovery action on boot and other focused screens. The watchdog counts active time only. Independent sessions are presented in order, with the currently active session kept together.
 
 Completion is written to AsyncStorage before native acknowledgement. If native cleanup fails, the coordinator suppresses the completed session and retries acknowledgement. Failed older acknowledgements survive completion of later mornings; successful cleanup compacts those failure markers. Explicit deletion records a cancellation marker before the coordinator clears that alarm's handoffs. Missing saved data without such a marker leaves a durable handoff recoverable and reports an error; absence alone is not treated as consent to delete evidence.
 
@@ -71,7 +83,8 @@ Completion is written to AsyncStorage before native acknowledgement. If native c
 | `app.json` | Enable that iOS prebuild plugin. |
 | `src/utils/wake-handoff.ts` | Pure, testable routing coordinator shared by cold and warm starts. |
 | `src/services/wake-handoff.ts` | Native candidate adapter, legacy recovery, timeout association and Android snooze compatibility. |
-| `src/components/wake-handoff-router.tsx` | Root lifecycle/native listeners, navigator readiness and shared routing status. |
+| `src/components/wake-handoff-router.tsx` | Root lifecycle/native listeners, watchdog observations, singular destination identity and shared retry UI. |
+| `src/components/screen-error-layer.tsx` | Expose navigation retry on the focused screen, including native modals. |
 | `src/app/_layout.tsx` | Replace the competing layout routing loop with the coordinator. |
 | `src/app/index.tsx` | Wait for authoritative resolution; show recoverable lookup failure. |
 | `src/services/alarm-kit.ts` | Types for durable native handoff operations and delivery metadata. |
@@ -91,8 +104,8 @@ Completion is written to AsyncStorage before native acknowledgement. If native c
 ## Verification
 
 - `npm run typecheck`: passed.
-- `npm run test:unit`: 108 passed. Includes all eleven requested mocked scenarios plus missing-data protection, legacy recovery, no time-only inference, delayed navigation commits, cleanup failures across mornings, actual provider completion/snooze/cold-hydration behavior and native safety ownership. Existing Manual/Mystery/Fajr, audio onset, scheduling/volume and session tests remain included.
-- Browser regression suite: 87 passed (Chromium); another 20 routing/Mystery checks passed against the final exported bundle. These exercise the exported web app, not native AlarmKit.
+- `npm run test:unit`: 144 passed. Includes all eleven requested mocked scenarios plus missing-data protection, legacy recovery, no time-only inference, delayed navigation commits, cleanup failures across mornings, actual provider completion/snooze/cold-hydration behavior and native safety ownership. Adds watchdog timing, wrong-route rejection, slow/late commits, explicit retries, stalled reads, background pauses, target invalidation, mixed old/new registrations, capture/read failures, identity deduplication and real-hook/boot/focused-screen retry wiring. Existing Manual/Mystery/Fajr, audio onset, scheduling/volume and session tests remain included.
+- Browser regression suite: 87 passed (Chromium), including Mystery Mode, Fajr, playback, routing and alarm lifecycle checks. Another 20 routing/Mystery checks passed against the final bundle after the queued-retry fix. These exercise the exported web app, not native AlarmKit.
 - Expo production exports for web, iOS and Android: passed. Native JavaScript/Hermes bundling does not compile Swift/Kotlin or establish system alarm delivery.
 - `expo prebuild --platform ios --no-install`: passed; generated `ios/Refresh/AppDelegate.swift` includes the native package. Plugin idempotence is also unit tested.
 - `git diff --check`: passed.
@@ -106,6 +119,8 @@ Test repeated Stop actions with Refresh foregrounded, backgrounded, suspended an
 
 Test two alarms close together, a repeating alarm the next day, timeout re-ring, snooze followed by timeout, Fajr's longer deadline, and completion followed by another launch. Confirm the Mystery gameplay order, difficulties, rounds and individual dua order remain identical within one session. Exercise saved pre-update registrations as well as newly saved alarms.
 
-Capture Console logs with subsystem `com.yacoobali.alarm`, category `AlarmTiming`. Expected stages are `alarm.alerting`, `intent.stop.begin`, `handoff.persisted`, `intent.stop.complete`, `app.created`/`app.resume`, `app.js.ready`/`app.js.resume`, `handoff.read`, `navigation.accepted` or reasoned `ignored`/`deferred`, `wake.completed` and `handoff.cleaned`. Identifiers are hashed; persistence logs include hashed registration/session links to correlate stages. No alarm labels, clock settings, journal text, dua content or blocked-app selections are logged.
+In a development test harness, withhold navigation commits while foregrounded, then test **Open wake-up screen** from boot, tabs and a native modal. Confirm the error appears after five active seconds, background time does not consume the budget, a late commit clears the error, and retry retains the same session without stacking ringing screens. Confirm a new alarm and a saved pre-update registration can alert together and both remain recoverable. These native-screen/OS checks are not established by the mocked UI tests.
+
+Capture Console logs with subsystem `com.yacoobali.alarm`, category `AlarmTiming`. Expected stages are `alarm.alerting`, `intent.stop.begin`, `handoff.persisted`, `intent.stop.complete`, `app.created`/`app.resume`, `app.js.ready`/`app.js.resume`, `handoff.read`, `navigation.requested`, `navigation.accepted` on a matching route commit or reasoned `failed`/`ignored`/`deferred`, `wake.completed` and `handoff.cleaned`. Identifiers are hashed; persistence logs include hashed registration/session links to correlate stages. No alarm labels, clock settings, journal text, dua content or blocked-app selections are logged.
 
 A missing `intent.stop.begin` distinguishes absent intent execution from a persistence error. `intent.stop.failed` indicates the durable write failed. A persisted record without app lifecycle logs points to activation; lifecycle/read logs without navigation point to hydration, navigator or saved-data guards. Do not use successful JavaScript mocks as evidence that iOS delivered the intent while locked or terminated.
