@@ -23,7 +23,7 @@ import {
 } from "@/components/ui";
 import { useApp } from "@/state/app-state";
 import { AlarmSwitch } from "@/components/alarm-switch";
-import { Mission, MysterySettings, GameplayKind, GAMEPLAY_KINDS, defaultMysterySettings, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
+import { Mission, MysterySettings, GameplayKind, GAMEPLAY_KINDS, defaultMysterySettings, editableMysterySettings, validateMystery, validateMissions, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
 import { selectedSupplications, supplications } from "@/utils/supplications";
@@ -99,11 +99,16 @@ export function Challenges() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
   const { draft, updateDraft } = useApp();
   const [mode, setMode] = useState(draft?.missionMode ?? "manual");
-  const [manual, setManual] = useState<Mission[]>(() => draft ? alarmMissions(draft) : [{ kind: "math", difficulty: "gentle" }]);
-  const [mystery, setMystery] = useState<MysterySettings>(() => draft?.mystery ?? {
-    ...defaultMysterySettings(),
-    games: defaultMysterySettings().games.map(game => ({ ...game, ...alarmMissions(draft ?? { challenge: "none", difficulty: "gentle" }).find(m => m.kind === game.kind), kind: game.kind })),
+  const [manual, setManual] = useState<Mission[]>(() => {
+    try { const missions = draft ? alarmMissions(draft) : [{ kind: "math" as const, difficulty: "gentle" as const }]; validateMissions(missions); return missions; }
+    catch { return []; }
   });
+  const [mystery, setMystery] = useState<MysterySettings>(() => draft?.mystery !== undefined ? editableMysterySettings(draft.mystery) : {
+    ...defaultMysterySettings(),
+    games: defaultMysterySettings().games.map(game => ({ ...game, ...manual.find(m => m.kind === game.kind), kind: game.kind })),
+  });
+  let configError: string | undefined;
+  if (mode === "mystery") { try { validateMystery(mystery); } catch (e) { configError = e instanceof Error ? e.message : "Repair your Mystery settings."; } }
   const selected: Mission[] = mode === "manual" ? manual : [
     ...mystery.games,
     { kind: "supplication", difficulty: "gentle", duaIds: mystery.duaIds },
@@ -136,7 +141,8 @@ export function Challenges() {
       <Chip title="Mystery" active={mode === "mystery"} onPress={() => changeMode("mystery")} />
     </View>
     {mode === "mystery" && <View style={{ gap: 12 }}>
-      <T style={{ color: c.muted }}>Each wake-up chooses 2–{Math.min(4, mystery.games.length)} different games from your pool, then your shuffled morning duas. Choose at least two games and one dua. Difficulty and rounds stay as you set them.</T>
+      <T style={{ color: c.muted }}>Each wake-up chooses 2–4 different games, capped by your pool size, then your shuffled morning duas. Choose at least two games and one dua. Difficulty and rounds stay as you set them.</T>
+      {configError && <T testID="mystery-config-error" accessibilityLiveRegion="polite" style={{ color: c.peach }}>{configError}</T>}
       <Card animated={Platform.OS !== "android"}><View style={{ padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
         <T style={{ flex: 1 }}>Include Fajr reminder</T>
         <AlarmSwitch testID="mystery-fajr" disabled={false} label="Include Fajr reminder" value={mystery.fajr} onValueChange={enabled => change(enabled ? [...selected, { kind: "fajr_reminder", difficulty: "gentle" }] : selected.filter(m => m.kind !== "fajr_reminder"))} />
@@ -165,7 +171,7 @@ export function Challenges() {
             <T variant="eyebrow" style={{ color: c.muted }}>YOUR DUAS</T>
             <T variant="small" style={{ color: c.muted }}>Choose one or more. Each keeps its recitation count.</T>
             {supplications.map(dua => {
-              const ids = selectedSupplications(mission.duaIds).map(d => d.id);
+              const ids = mode === "mystery" ? mystery.duaIds : selectedSupplications(mission.duaIds).map(d => d.id);
               const active = ids.includes(dua.id);
               return <Tap key={dua.id} label={`Dua: ${dua.title}`} selected={active} disabled={active && ids.length === 1} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, duaIds: active ? ids.filter(id => id !== dua.id) : [...ids, dua.id] } : m))}>
                 <View style={{ padding: 12, borderRadius: 14, backgroundColor: c.raised, flexDirection: "row", gap: 10, alignItems: "center" }}>
@@ -209,7 +215,7 @@ export function Challenges() {
       <Card animated={Platform.OS !== "android"} style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 12 }}><Icon name="sunny-outline" /><View style={{ flex: 1 }}><T variant="label">No missions</T><T variant="small" style={{ color: c.muted }}>Just tap to dismiss.</T></View>{!selected.length && <Icon name="checkmark-circle" />}</Card>
     </Tap>}
     <T variant="small" style={{ color: c.faint }}>Missions run inside Refresh. Your device’s alarm controls remain available.</T>
-    {editing && <Button title={mode === "mystery" ? "Use Mystery Mode" : selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} onPress={() => router.back()} icon="checkmark" />}
+    {editing && <Button title={mode === "mystery" ? "Use Mystery Mode" : selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} disabled={!!configError} onPress={() => router.back()} icon="checkmark" />}
   </Screen>;
 }
 export function Themes() {

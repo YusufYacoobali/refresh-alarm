@@ -27,10 +27,20 @@ export type MysterySettings = {
 export function defaultMysterySettings(): MysterySettings {
   return { games: GAMEPLAY_KINDS.map(kind => ({ kind, difficulty: "gentle" })), duaIds: supplications.map(d => d.id), fajr: false };
 }
+/** Salvage readable choices for the editor without silently enabling games
+ * from a corrupt pool. Saving still requires the active-mode validation. */
+export function editableMysterySettings(settings: MysterySettings): MysterySettings {
+  const games = Array.isArray(settings?.games) ? settings.games.filter((m, index, all) => m &&
+    GAMEPLAY_KINDS.includes(m.kind) && all.findIndex(other => other?.kind === m.kind) === index).map(m => ({
+      kind: m.kind, difficulty: m.difficulty === "bright" ? "bright" as const : "gentle" as const,
+      ...(m.rounds !== undefined ? { rounds: missionRounds(m) } : {}),
+    })) : [];
+  return { games, duaIds: Array.isArray(settings?.duaIds) ? supplications.filter(d => settings.duaIds.includes(d.id)).map(d => d.id) : [], fajr: settings?.fajr === true };
+}
 export function validateMystery(settings: MysterySettings) {
   if (!settings || !Array.isArray(settings.games) || settings.games.length < 2 || settings.games.length > 6 ||
       new Set(settings.games.map(m => m?.kind)).size !== settings.games.length ||
-      settings.games.some(m => !m || !GAMEPLAY_KINDS.includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+      settings.games.some(m => !m || !GAMEPLAY_KINDS.includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) || m.duaIds !== undefined ||
         (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))))
     throw new Error("Choose at least two different Mystery games with valid difficulty and rounds.");
   if (!Array.isArray(settings.duaIds) || !settings.duaIds.length || new Set(settings.duaIds).size !== settings.duaIds.length ||
@@ -77,6 +87,12 @@ export type Alarm = {
   registration?: Registration;
   nextAt?: number;
 };
+/** Mission/background edits live in JS. These fields affect future native
+ * deliveries and cannot be replaced while their alarm is actively ringing. */
+export function sameAlarmDeliverySettings(a: Alarm, b: Alarm) {
+  const fields: (keyof Alarm)[] = ["hour", "minute", "days", "enabled", "label", "sound", "volume", "volumeRampSeconds", "appBlock"];
+  return fields.every(key => JSON.stringify(a[key]) === JSON.stringify(b[key]));
+}
 /** Manual order takes precedence; new alarms follow it in clock-time order. */
 export function orderAlarms(alarms: Alarm[], order?: string[]): Alarm[] {
   const ranks = new Map((order ?? []).map((id, index) => [id, index]));
@@ -97,7 +113,11 @@ export function copyAlarm(alarm: Alarm, id: string, existingLabels: string[]): A
     label = `${alarm.label.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
     number += 1;
   } while (labels.has(label));
-  return { ...settings, id, label, days: [...alarm.days], ...(alarm.appBlock ? { appBlock: { ...alarm.appBlock } } : {}), ...(alarm.mystery ? { mystery: { ...alarm.mystery, games: alarm.mystery.games.map(m => ({ ...m })), duaIds: [...alarm.mystery.duaIds] } } : {}), missions: alarm.missions?.map(m => ({ ...m, ...(m.duaIds ? { duaIds: [...m.duaIds] } : {}) })) };
+  // Stored mission settings are JSON data. Clone both modes independently,
+  // including inactive damaged data that the editor may need to repair.
+  return { ...settings, id, label, days: [...alarm.days], ...(alarm.appBlock ? { appBlock: { ...alarm.appBlock } } : {}),
+    ...(alarm.mystery !== undefined ? { mystery: JSON.parse(JSON.stringify(alarm.mystery)) } : {}),
+    missions: alarm.missions === undefined ? undefined : JSON.parse(JSON.stringify(alarm.missions)) };
 }
 export const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const challengeNames: Record<Challenge, string> = {
@@ -120,7 +140,10 @@ export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "dif
   });
 }
 export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty" | "missionMode" | "mystery">) {
-  if (alarm.missionMode === "mystery") return `Mystery · 2–${Math.min(4, alarm.mystery?.games.length ?? 6)} games · Morning duas${alarm.mystery?.fajr ? " · Fajr" : ""}`;
+  if (alarm.missionMode === "mystery") {
+    const count = Array.isArray(alarm.mystery?.games) ? alarm.mystery.games.length : 0;
+    return count < 2 ? "Mystery · Repair game selection" : `Mystery · ${count === 2 ? "2" : `2–${Math.min(4, count)}`} random games · Morning duas${alarm.mystery?.fajr ? " · Fajr" : ""}`;
+  }
   const missions = alarmMissions(alarm);
   return missions.length ? missions.map(missionLabel).join(" → ") : "No missions";
 }
@@ -188,11 +211,21 @@ export function nextAlarmAt(
   const next = Math.min(...times.filter(at => at > +now));
   return Number.isFinite(next) ? new Date(next) : null;
 }
-export function validateAlarm(a: Alarm) {
-  if (a.missionMode !== undefined && !["manual", "mystery"].includes(a.missionMode))
+export function validateMissions(missions: Mission[] | undefined) {
+  if (missions !== undefined && (!Array.isArray(missions) || missions.length > 8 ||
+    missions.some(m => !m || (m.kind as string) === "none" || !Object.hasOwn(challengeNames, m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+      (m.duaIds !== undefined && (m.kind !== "supplication" || !Array.isArray(m.duaIds) || !m.duaIds.length || new Set(m.duaIds).size !== m.duaIds.length || m.duaIds.some(id => !supplications.some(d => d.id === id)))) ||
+      (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))) ||
+    new Set(missions.map(m => m.kind)).size !== missions.length))
+    throw new Error(`Choose each mission once, with a valid difficulty and 1–${MAX_MISSION_ROUNDS} rounds.`);
+}
+/** Hydration checks core alarm data separately so a broken Mystery selection
+ * cannot hide saved alarms or block the native ringing handoff. */
+export function validateAlarm(a: Alarm, options: { missionConfig?: boolean } = {}) {
+  const checkMissions = options.missionConfig !== false;
+  if (checkMissions && a.missionMode !== undefined && !["manual", "mystery"].includes(a.missionMode))
     throw new Error("Choose Manual or Mystery Mode.");
-  if (a.mystery !== undefined) validateMystery(a.mystery);
-  if (a.missionMode === "mystery" && !a.mystery) throw new Error("Choose your Mystery games and morning duas.");
+  if (checkMissions && a.missionMode === "mystery") validateMystery(a.mystery!);
   if (
     !Number.isInteger(a.hour) ||
     a.hour < 0 ||
@@ -209,19 +242,14 @@ export function validateAlarm(a: Alarm) {
     throw new Error("Choose valid repeat days.");
   if (!a.label.trim() || a.label.length > 48)
     throw new Error("Give your alarm a name (up to 48 characters).");
-  if (!Object.hasOwn(challengeNames, a.challenge))
+  if (checkMissions && a.missionMode !== "mystery" && !Object.hasOwn(challengeNames, a.challenge))
     throw new Error("Choose a wake-up challenge.");
   if (
-    !["gentle", "bright"].includes(a.difficulty) ||
+    (checkMissions && a.missionMode !== "mystery" && !["gentle", "bright"].includes(a.difficulty)) ||
     ![0, 5, 10, 15].includes(a.snooze)
   )
     throw new Error("Choose valid challenge and snooze settings.");
-  if (a.missions !== undefined && (!Array.isArray(a.missions) || a.missions.length > 8 ||
-    a.missions.some(m => !m || (m.kind as string) === "none" || !Object.hasOwn(challengeNames, m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
-      (m.duaIds !== undefined && (m.kind !== "supplication" || !Array.isArray(m.duaIds) || !m.duaIds.length || new Set(m.duaIds).size !== m.duaIds.length || m.duaIds.some(id => !supplications.some(d => d.id === id)))) ||
-      (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))) ||
-    new Set(a.missions.map(m => m.kind)).size !== a.missions.length))
-    throw new Error(`Choose each mission once, with a valid difficulty and 1–${MAX_MISSION_ROUNDS} rounds.`);
+  if (checkMissions && a.missionMode !== "mystery") validateMissions(a.missions);
   if (!validSound(a.sound))
     throw new Error("Choose a valid sound preference.");
   if (a.silentMissions !== undefined && typeof a.silentMissions !== "boolean")

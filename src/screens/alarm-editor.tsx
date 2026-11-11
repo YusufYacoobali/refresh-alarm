@@ -250,7 +250,7 @@ export function AlarmEditor() {
         <Row icon="volume-mute-outline" title="Silent during missions">
           <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? data.silentMissions ?? true} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>
-        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>Each mission has a 1-minute timer. If it runs out, the alarm rings again and all missions restart.</T>
+        <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>Games and each dua have a 1-minute timer. Fajr reminders allow 5 minutes. If a timer runs out, the alarm rings again and the routine restarts.</T>
         </View>}
       </Card>
       <Card animated={Platform.OS !== "android"}>

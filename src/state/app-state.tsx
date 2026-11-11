@@ -13,7 +13,7 @@ import AndroidAlarm from "@/services/android-alarm";
 import { cancelMissionTimeout } from "@/services/mission-timeout";
 import { fajrReminderIndex } from "@/utils/fajr-reminders";
 import { CustomSound, setCustomSounds } from "@/utils/sounds";
-import { resolveMysterySession, validateWakeSession, type WakeIdentity, type WakeSession } from "@/utils/wake-session";
+import { cleanWakeData, completeWakeSession, createDuaRecoverySession, resolveMysterySession, sameWakeSession, wakeHistory, WakeRoutineError, type WakeData, type WakeIdentity, type WakeSession } from "@/utils/wake-session";
 import {
   Alarm,
   Registration,
@@ -23,6 +23,7 @@ import {
   orderAlarms,
   alarmMissions,
   missionRounds,
+  sameAlarmDeliverySettings,
 } from "@/utils/alarms";
 import {
   cancelRegistration,
@@ -31,7 +32,7 @@ import {
 } from "@/services/scheduler";
 
 type JournalEntry = { date: string; mood: string; note: string };
-type Data = {
+type Data = WakeData & {
   version: 1;
   onboarded: boolean;
   alarms: Alarm[];
@@ -42,7 +43,6 @@ type Data = {
   fajrReminderIndex?: number;
   customSounds?: CustomSound[];
   silentMissions?: boolean;
-  wakeSessions?: Record<string, WakeSession>;
   snoozed?: { alarmId: string; at: number; registration: Registration; sessionId?: string };
 };
 const initial: Data = {
@@ -89,9 +89,9 @@ type Context = {
   update(patch: Partial<Data>): Promise<void>;
   setMissionSilenced(alarmId: string | null, silent: boolean): Promise<void>;
   addCustomSound(sound: CustomSound): Promise<void>;
-  finish(alarm: Alarm): Promise<void>;
+  finish(alarm: Alarm, sessionId?: string): Promise<void>;
   snooze(alarm: Alarm): Promise<void>;
-  ensureWakeSession(alarm: Alarm, identity: WakeIdentity): Promise<WakeSession>;
+  ensureWakeSession(alarm: Alarm, identity: WakeIdentity, recover?: boolean): Promise<WakeSession | null>;
 };
 const Ctx = createContext<Context | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -117,21 +117,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           !["serene", "moonlight", "ocean"].includes(parsed.theme)
         )
           throw new Error("Saved data could not be read.");
-        parsed.alarms.forEach(validateAlarm);
-        if (parsed.wakeSessions !== undefined) {
-          if (!parsed.wakeSessions || typeof parsed.wakeSessions !== "object" || Array.isArray(parsed.wakeSessions))
-            throw new Error("Saved wake-up sessions could not be read.");
-          for (const alarm of parsed.alarms) {
-            const session = parsed.wakeSessions[alarm.id];
-            if (session) validateWakeSession(alarm, session);
-          }
-        }
+        parsed.alarms.forEach(alarm => validateAlarm(alarm, { missionConfig: false }));
         if (parsed.alarmOrder && (!Array.isArray(parsed.alarmOrder) || parsed.alarmOrder.some(id => typeof id !== "string")))
           throw new Error("Saved alarm order could not be read.");
         if (parsed.customSounds && !Array.isArray(parsed.customSounds)) throw new Error("Saved sounds could not be read.");
         setCustomSounds(parsed.customSounds ?? []);
-        current.current = parsed;
-        setData(parsed);
+        const restored = { ...parsed, ...cleanWakeData(parsed.alarms, parsed) };
+        current.current = restored;
+        setData(restored);
       }
       setReady(true);
     } catch {
@@ -228,6 +221,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     transaction(async () => {
       validateAlarm(alarm);
       const old = current.current.alarms.find((a) => a.id === alarm.id);
+      const active = current.current.wakeSessions?.[alarm.id] &&
+        (AndroidAlarm?.activeAlarm()?.alarmId === alarm.id || AlarmKit?.activeAlarm?.() === alarm.id);
+      if (old && active) {
+        if (!sameAlarmDeliverySettings(old, alarm))
+          throw new Error("Finish the current wake-up before changing its time, repeat days, sound, volume or app blocking. Your edits are kept.");
+        // Mission settings are not sent to the scheduler. Keep the native
+        // registration and its currently playing occurrence untouched.
+        await persist({ ...current.current, alarms: current.current.alarms.map(a => a.id === alarm.id ? {
+          ...alarm, label: alarm.label.trim(), registration: old.registration, nextAt: old.nextAt,
+        } : a) });
+        return;
+      }
       const registration = alarm.enabled
         ? await scheduleAlarm(alarm)
         : undefined;
@@ -281,6 +286,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...current.current,
           alarms: current.current.alarms.filter((a) => a.id !== alarm.id),
           wakeSessions: Object.fromEntries(Object.entries(current.current.wakeSessions ?? {}).filter(([id]) => id !== alarm.id)),
+          mysteryHistory: Object.fromEntries(Object.entries(current.current.mysteryHistory ?? {}).filter(([id]) => id !== alarm.id)),
+          wakeSessionRecovery: Object.fromEntries(Object.entries(current.current.wakeSessionRecovery ?? {}).filter(([id]) => id !== alarm.id)),
           alarmOrder: current.current.alarmOrder?.filter(id => id !== alarm.id),
           snoozed:
             current.current.snoozed?.alarmId === alarm.id
@@ -293,8 +300,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     });
-  const finish = (alarm: Alarm) =>
+  const finish = (alarm: Alarm, sessionId?: string) =>
     transaction(async () => {
+      const session = current.current.wakeSessions?.[alarm.id];
+      if (sessionId && session?.id !== sessionId) {
+        if (!session && current.current.mysteryHistory?.[alarm.id]?.id === sessionId && current.current.mysteryHistory[alarm.id].completedAt !== undefined) return;
+        throw new Error("This wake-up routine has changed. Return to the ringing screen to continue.");
+      }
+      const native = AndroidAlarm?.activeAlarm();
+      if (session && native?.alarmId === alarm.id && !sameWakeSession(alarm, session,
+        { sessionId: native.sessionId, eventId: native.eventId }, current.current.snoozed))
+        throw new Error("A new wake-up has started. Return to the ringing screen to continue.");
+      const executed = session?.missions ?? alarmMissions(alarm);
       await cancelMissionTimeout();
       await stopAlarm(alarm);
       if (current.current.snoozed?.alarmId === alarm.id)
@@ -313,12 +330,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : a,
         ),
         completions: [...new Set([...current.current.completions, today])],
-        ...(current.current.wakeSessions?.[alarm.id] ? { wakeSessions: {
-          ...current.current.wakeSessions,
-          [alarm.id]: { ...current.current.wakeSessions[alarm.id], completed: true },
-        } } : {}),
+        ...completeWakeSession(current.current, alarm.id),
         fajrReminderIndex: fajrReminderIndex(fajrReminderIndex(current.current.fajrReminderIndex) +
-          (alarm.missionMode === "mystery" ? current.current.wakeSessions?.[alarm.id]?.missions ?? [] : alarmMissions(alarm)).filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
+          executed.filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
       });
       AlarmKit?.completeAlarm?.(alarm.id);
     });
@@ -340,19 +354,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw e;
       }
     });
-  const ensureWakeSession = (alarm: Alarm, identity: WakeIdentity): Promise<WakeSession> => {
+  const ensureWakeSession = (alarm: Alarm, identity: WakeIdentity, recover = false): Promise<WakeSession | null> => {
     // Ringing and cold-launch challenge routes may arrive together. Serialize
     // generation and persist before exposing any generated mission to the UI.
     const work = wakeQueue.current.then(async () => {
+      const savedAlarm = current.current.alarms.find(a => a.id === alarm.id);
+      if (!savedAlarm) throw new WakeRoutineError("This alarm was deleted.", false);
       const previous = current.current.wakeSessions?.[alarm.id];
+      const history = current.current.mysteryHistory?.[alarm.id];
       const native = AndroidAlarm?.activeAlarm();
-      const session = resolveMysterySession(alarm, previous, {
+      const occurrence = {
         ...identity,
-        ...(native?.alarmId === alarm.id ? { sessionId: native.sessionId, eventId: native.eventId } : {}),
-      }, current.current.snoozed);
-      if (session !== previous) await transaction(() => persist({
+        ...(native?.alarmId === alarm.id ? { sessionId: native.sessionId ?? identity.sessionId, eventId: native.eventId } : {}),
+      };
+      // The active snapshot wins even if the alarm's mode or settings changed.
+      if (previous && sameWakeSession(savedAlarm, previous, occurrence, current.current.snoozed)) return previous;
+      if (history?.completedAt !== undefined && sameWakeSession(savedAlarm, history, occurrence, current.current.snoozed))
+        throw new WakeRoutineError("This wake-up has already been completed.", false);
+      const recovery = current.current.wakeSessionRecovery?.[alarm.id];
+      if (recovery && !recover) throw new WakeRoutineError(recovery.reason);
+      let session: WakeSession | null = null;
+      if (recover) session = createDuaRecoverySession(savedAlarm, occurrence, current.current.snoozed);
+      else if (savedAlarm.missionMode === "mystery") session = resolveMysterySession(savedAlarm, previous, occurrence, current.current.snoozed, Date.now(), Math.random, history);
+      else {
+        try { validateAlarm(savedAlarm); }
+        catch { throw new WakeRoutineError("Your mission settings need repair. The alarm will keep ringing until you choose how to continue."); }
+      }
+      if (session) session = { ...session, fajrIndex: fajrReminderIndex(current.current.fajrReminderIndex) };
+      const sessions = { ...current.current.wakeSessions };
+      const recoveries = { ...current.current.wakeSessionRecovery };
+      if (session) sessions[alarm.id] = session; else delete sessions[alarm.id];
+      delete recoveries[alarm.id];
+      if (session || previous || recovery) await transaction(() => persist({
         ...current.current,
-        wakeSessions: { ...current.current.wakeSessions, [alarm.id]: session },
+        wakeSessions: sessions,
+        mysteryHistory: { ...current.current.mysteryHistory, ...(previous ? { [alarm.id]: wakeHistory(previous) } : {}) },
+        wakeSessionRecovery: recoveries,
       }));
       return session;
     });

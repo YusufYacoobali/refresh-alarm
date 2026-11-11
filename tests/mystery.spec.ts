@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { fajrReminders } from "../src/utils/fajr-reminders";
 
 const time = new Date(2026, 8, 18, 8, 0);
 async function seed(page: Page, manual = false) {
@@ -35,10 +36,7 @@ async function finishGame(page: Page, game: { kind: string; rounds?: number }) {
     await solveMath(page);
   }
 }
-async function finishRoutine(page: Page, missions: any[]) {
-  let count = 0;
-  for (const mission of missions) {
-    await expect(page.getByText(`Mission ${++count} of ${missions.length}`, { exact: true })).toBeVisible();
+async function finishMission(page: Page, mission: any) {
     if (mission.kind === "supplication") {
       for (const id of mission.duaIds) {
         const titles: Record<string, string> = { waking: "Upon waking", contentment: "Contentment in faith", protection: "Seeking protection" };
@@ -49,8 +47,20 @@ async function finishRoutine(page: Page, missions: any[]) {
       await expect(page.getByTestId("mission-timer")).toHaveText("5:00");
       await page.getByRole("button", { name: "I’ve read it", exact: true }).click();
     } else await finishGame(page, mission);
+}
+async function finishRoutine(page: Page, missions: any[]) {
+  let count = 0;
+  for (const mission of missions) {
+    await expect(page.getByText(`Mission ${++count} of ${missions.length}`, { exact: true })).toBeVisible();
+    await finishMission(page, mission);
   }
   await expect(page.getByText("First win of the day.")).toBeVisible();
+}
+
+async function changeStored(page: Page, change: (state: any) => void) {
+  const state = await saved(page);
+  change(state);
+  await page.evaluate(state => localStorage.setItem("daybreak.state.v1", JSON.stringify(state)), state);
 }
 
 test("Manual and Mystery settings remain independent through switching, previews, saving and reload", async ({ page }) => {
@@ -108,7 +118,8 @@ test("timeout and cold launches restart the same routine, preserve dua order, an
   await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
   expect(await session(page)).toEqual(first);
   await finishRoutine(page, first.missions);
-  expect((await session(page)).completed).toBe(true);
+  expect(await session(page)).toBeUndefined();
+  expect((await saved(page)).mysteryHistory.mystery.completedAt).toBeDefined();
   expect((await saved(page)).fajrReminderIndex).toBe(3);
   expect((await saved(page)).completions).toHaveLength(1);
   await page.clock.fastForward(65000);
@@ -116,8 +127,9 @@ test("timeout and cold launches restart the same routine, preserve dua order, an
   // The next scheduled wake-up generates once and avoids yesterday's order.
   await page.clock.fastForward(86400000);
   await page.goto("/ringing?id=mystery&eventId=next-scheduled");
-  await expect.poll(async () => (await session(page))?.id).not.toBe(first.id);
+  await expect(page.getByRole("button", { name: "Wake up my mind", exact: true })).toBeEnabled();
   const next = await session(page);
+  expect(next.id).not.toBe(first.id);
   expect(next.missions.slice(0, 2).map((m: any) => m.kind)).not.toEqual(first.missions.slice(0, 2).map((m: any) => m.kind));
 });
 
@@ -178,6 +190,186 @@ test("full Mystery previews retain their routine on timeout without saving histo
   expect(new URL(page.url()).searchParams.get("previewSequence")).toBe(sequence);
   await finishRoutine(page, missions);
   expect(await saved(page)).toEqual(before);
+});
+
+test("active routines survive mode, schedule and configuration changes and completion clears only the active snapshot", async ({ page }) => {
+  await seed(page);
+  await page.goto("/challenge?id=mystery");
+  await expect(page.getByTestId("mission-timer")).toBeVisible();
+  const first = await session(page);
+  await changeStored(page, state => {
+    state.alarms[0].missionMode = "manual";
+    state.alarms[0].missions = [];
+    state.alarms[0].hour = 9;
+    state.alarms[0].mystery.games = [];
+    state.fajrReminderIndex = 4;
+  });
+  await page.goto("/ringing?id=mystery&eventId=mystery%3Aactive");
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  expect(await session(page)).toEqual(first);
+  // Original hadith content stays fixed even after another alarm advances the
+  // global rotation. Completion still advances the current global cursor once.
+  for (const mission of first.missions) {
+    if (mission.kind === "fajr_reminder") await expect(page.getByTestId("hadith-arabic")).toHaveText(fajrReminders[2].arabic);
+    await finishMission(page, mission);
+  }
+  await expect(page.getByText("First win of the day.")).toBeVisible();
+  const after = await saved(page);
+  expect(after.wakeSessions.mystery).toBeUndefined();
+  expect(after.mysteryHistory.mystery.gameplay).toEqual(first.missions.slice(0, 2).map((m: any) => m.kind));
+  expect(after.mysteryHistory.mystery.missions).toBeUndefined();
+  expect(after.fajrReminderIndex).toBe(0);
+  expect(after.alarms[0].missionMode).toBe("manual");
+});
+
+for (const ending of ["before", "after", "disabled"] as const) test(`Fajr ${ending} duas uses the effective routine and advances only on completion`, async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  await changeStored(page, state => {
+    const alarm = state.alarms[0];
+    alarm.mystery.fajr = ending !== "disabled";
+    const duas = { kind: "supplication", difficulty: "gentle", duaIds: ["protection", "waking", "contentment"] };
+    const fajr = { kind: "fajr_reminder", difficulty: "gentle" };
+    state.wakeSessions = { mystery: { id: "fixed", occurrenceKey: `mystery:${+time - 3600000}`, startedAt: +time,
+      config: alarm.mystery, fajrIndex: 2, missions: [...alarm.mystery.games,
+        ...(ending === "before" ? [fajr, duas] : ending === "after" ? [duas, fajr] : [duas])] } };
+  });
+  await page.goto("/challenge?id=mystery&sessionId=fixed");
+  await expect(page.getByTestId("mission-timer")).toBeVisible();
+  const routine = await session(page);
+  await finishRoutine(page, routine.missions);
+  expect((await saved(page)).fajrReminderIndex).toBe(ending === "disabled" ? 2 : 3);
+  expect(await session(page)).toBeUndefined();
+});
+
+test("invalid Mystery configuration rings and offers explicit, persistent recovery without adding games", async ({ page }) => {
+  await seed(page);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/alarms");
+  await changeStored(page, state => {
+    state.alarms[0].sound = "digital_beep";
+    state.alarms[0].mystery = { games: [], duaIds: ["protection"], fajr: false };
+  });
+  await page.goto("/ringing?id=mystery");
+  await expect(page.getByText(/Your Mystery settings need repair/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Wake up my mind", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Hello, new day", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Use morning duas this time", exact: true })).toBeInViewport();
+  await expect(page.locator('audio[data-alarm="true"]').or(page.getByRole("button", { name: "Play alarm sound", exact: true }))).toHaveCount(1);
+  await page.getByRole("button", { name: "Use morning duas this time", exact: true }).click();
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  const recovery = await session(page);
+  expect(recovery.fallback).toBe("duas-only");
+  expect(recovery.missions).toEqual([{ kind: "supplication", difficulty: "gentle", duaIds: ["protection"] }]);
+  await page.clock.fastForward(60000);
+  await expect(page.getByTestId("alarm-wallpaper-screen")).toBeVisible();
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  expect(await session(page)).toEqual(recovery);
+  for (let n = 0; n < 3; n++) await page.getByRole("button", { name: "I’ve recited it", exact: true }).click();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
+  expect((await saved(page)).alarms[0].mystery.games).toEqual([]);
+  expect((await saved(page)).fajrReminderIndex).toBe(2);
+});
+
+test("corrupt sessions do not block startup or silently regenerate and can be explicitly recovered", async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  await changeStored(page, state => { state.wakeSessions = { mystery: { id: "damaged", missions: [] } }; });
+  await page.goto("/ringing?id=mystery");
+  await expect(page.getByText(/The saved routine is damaged/)).toBeVisible();
+  expect((await saved(page)).wakeSessions.mystery).toEqual({ id: "damaged", missions: [] });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Use morning duas this time", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use morning duas this time", exact: true }).click();
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  expect((await session(page)).fallback).toBe("duas-only");
+  expect((await saved(page)).wakeSessionRecovery.mystery).toBeUndefined();
+});
+
+test("an excluded math game needs an explicit one-time shake fallback choice", async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  await changeStored(page, state => {
+    const config = { games: [{ kind: "shake", difficulty: "gentle" }, { kind: "memory", difficulty: "gentle" }], duaIds: ["waking"], fajr: false };
+    state.alarms[0].mystery = config;
+    state.wakeSessions = { mystery: { id: "shake-session", occurrenceKey: `mystery:${+time - 3600000}`, startedAt: +time,
+      config, missions: [...config.games, { kind: "supplication", difficulty: "gentle", duaIds: ["waking"] }] } };
+  });
+  await page.goto("/challenge?id=mystery&sessionId=shake-session");
+  await expect(page.getByText(/Math is outside your chosen games/)).toBeVisible();
+  await expect(page.getByTestId("math-question")).toHaveCount(0);
+  await page.getByRole("button", { name: "Use math once for this shake mission", exact: true }).click();
+  await expect(page.getByTestId("math-question")).toBeVisible();
+  expect((await session(page)).missions[0].kind).toBe("shake");
+});
+
+test("Mystery duplicate and delete preserve settings while keeping session ownership separate", async ({ page }) => {
+  await seed(page);
+  await page.goto("/challenge?id=mystery");
+  await expect(page.getByTestId("mission-timer")).toBeVisible();
+  const first = await session(page);
+  await page.goto("/alarms");
+  await page.getByRole("button", { name: "More options for alarm at 7:00 AM", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Duplicate alarm at 7:00 AM", exact: true }).click();
+  await expect.poll(async () => (await saved(page)).alarms.length).toBe(2);
+  const state = await saved(page);
+  expect(state.alarms[1].mystery).toEqual(state.alarms[0].mystery);
+  expect(state.wakeSessions[state.alarms[1].id]).toBeUndefined();
+  expect(state.wakeSessions.mystery).toEqual(first);
+  await page.getByRole("button", { name: "More options for alarm at 7:00 AM", exact: true }).first().click();
+  await page.getByRole("menuitem", { name: "Delete alarm at 7:00 AM", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm delete alarm at 7:00 AM", exact: true }).click();
+  await expect.poll(async () => (await saved(page)).alarms.length).toBe(1);
+  expect((await saved(page)).wakeSessions.mystery).toBeUndefined();
+});
+
+test("a failed Mystery completion keeps its snapshot and Fajr rotation unchanged until retry succeeds", async ({ page }) => {
+  await seed(page);
+  await page.addInitScript(() => {
+    const write = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (key === "daybreak.state.v1" && (window as any).failCompletion) {
+        (window as any).failCompletion = false;
+        throw new Error("Could not save Mystery completion");
+      }
+      return write.call(this, key, value);
+    };
+  });
+  await page.goto("/challenge?id=mystery");
+  await expect(page.getByTestId("mission-timer")).toBeVisible();
+  const first = await session(page);
+  for (const mission of first.missions.slice(0, -1)) await finishMission(page, mission);
+  await page.evaluate(() => { (window as any).failCompletion = true; });
+  await finishMission(page, first.missions.at(-1));
+  await expect(page.getByRole("alert")).toHaveText("Could not save Mystery completion");
+  expect(await session(page)).toEqual(first);
+  expect((await saved(page)).fajrReminderIndex).toBe(2);
+  await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
+  await page.getByRole("button", { name: "Finish waking up", exact: true }).click();
+  await expect(page.getByText("First win of the day.")).toBeVisible();
+  expect(await session(page)).toBeUndefined();
+  expect((await saved(page)).fajrReminderIndex).toBe(3);
+});
+
+test("an empty corrupt pool stays editable and cannot be accepted until two games are selected", async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  await changeStored(page, state => { state.alarms[0].mystery.games = []; });
+  await page.reload();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
+  await expect(page.getByTestId("mystery-config-error")).toBeVisible();
+  const use = page.getByRole("button", { name: "Use Mystery Mode", exact: true });
+  await expect(use).toBeDisabled();
+  await page.getByRole("button", { name: "Math puzzle", exact: true }).click();
+  await expect(use).toBeDisabled();
+  await page.getByRole("button", { name: "Shake to wake", exact: true }).click();
+  await expect(use).toBeEnabled();
+  await use.click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  expect((await saved(page)).alarms[0].mystery.games.map((m: any) => m.kind)).toEqual(["math", "shake"]);
 });
 
 test("configuration sections respond on their first tap and repeated opening with motion enabled", async ({ page }) => {

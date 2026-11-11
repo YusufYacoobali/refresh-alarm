@@ -98,6 +98,7 @@ export function Button({
   onPress,
   secondary = false,
   loading = false,
+  disabled = false,
   haptic = "light",
   icon,
   style,
@@ -106,12 +107,13 @@ export function Button({
   onPress: () => void;
   secondary?: boolean;
   loading?: boolean;
+  disabled?: boolean;
   haptic?: false | HapticKind;
   icon?: IconName;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Tap onPress={onPress} label={title} disabled={loading} style={style} haptic={haptic}>
+    <Tap onPress={onPress} label={title} disabled={loading || disabled} style={style} haptic={haptic}>
       <LinearGradient
         colors={secondary ? ["#CEC2FF", "#A997EB"] : ["#FFE4CC", "#F4C8A9"]}
         start={{ x: 0, y: 0 }}

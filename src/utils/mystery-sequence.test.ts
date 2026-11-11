@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alarmMissions, copyAlarm, defaultMysterySettings, GAMEPLAY_KINDS, validateAlarm, validateMystery, type Alarm, type GameplayKind } from "./alarms";
+import { alarmMissions, copyAlarm, defaultMysterySettings, editableMysterySettings, GAMEPLAY_KINDS, sameAlarmDeliverySettings, validateAlarm, validateMystery, type Alarm, type GameplayKind } from "./alarms";
 import { generateMysterySequence } from "./mystery-sequence";
 import { orderedSupplications, selectedSupplications, supplications } from "./supplications";
-import { resolveMysterySession, validateWakeSession, wakeOccurrenceKey } from "./wake-session";
+import { cleanWakeData, completeWakeSession, createDuaRecoverySession, resolveMysterySession, sameWakeSession, validateWakeSession, wakeHistory, wakeOccurrenceKey, WakeRoutineError } from "./wake-session";
 
 function rng(seed: number) { return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32); }
 const settings = defaultMysterySettings();
@@ -107,6 +107,7 @@ test("persisted routines validate after settings changes and reject incomplete o
   assert.throws(() => validateWakeSession(alarm, { ...first, missions: first.missions.slice(0, 1) }));
   assert.throws(() => validateWakeSession(alarm, { ...first, missions: [...first.missions].reverse() }));
   assert.throws(() => validateWakeSession(alarm, { ...first, startedAt: NaN }));
+  assert.throws(() => validateWakeSession(alarm, { ...first, missions: first.missions.map((m, i) => i === 0 ? { ...m, rounds: 10 } : m) }));
 });
 
 test("snooze retains the sequence; a genuine scheduled wake-up replaces it even with a pending snooze", () => {
@@ -121,10 +122,90 @@ test("snooze retains the sequence; a genuine scheduled wake-up replaces it even 
 test("iOS active identifiers and browser launches reuse persisted occurrences and change at the next scheduled wake-up", () => {
   const first = resolveMysterySession(alarm, undefined, { eventId: "test:active" }, undefined, morning);
   const completed = { ...first, completed: true };
-  assert.equal(resolveMysterySession(alarm, completed, { eventId: "test:active" }, undefined, morning + 60000), completed);
+  assert.throws(() => resolveMysterySession(alarm, completed, { eventId: "test:active" }, undefined, morning + 60000), WakeRoutineError);
   const next = resolveMysterySession(alarm, completed, { eventId: "test:active" }, undefined, morning + 86400000);
   assert.notEqual(next.id, first.id);
   assert.deepEqual(GAMEPLAY_KINDS.length, 6);
   const weekly = { ...alarm, days: [5] };
   assert.equal(wakeOccurrenceKey(weekly, morning + 86400000), wakeOccurrenceKey(weekly, morning));
+});
+
+test("only the active configuration validates, and corrupt inactive choices remain preserved", () => {
+  const manual = { ...alarm, missionMode: "manual" as const, mystery: { ...settings, games: [] } };
+  assert.doesNotThrow(() => validateAlarm(manual));
+  const mystery = { ...alarm, missions: [{ kind: "unknown" }] as any };
+  assert.doesNotThrow(() => validateAlarm(mystery));
+  assert.throws(() => validateAlarm({ ...manual, missionMode: "mystery" }));
+  assert.doesNotThrow(() => validateAlarm({ ...manual, missionMode: "mystery" }, { missionConfig: false }));
+  const editable = editableMysterySettings({ games: [], duaIds: [], fajr: false });
+  assert.deepEqual(editable.games, []);
+  assert.deepEqual(editable.duaIds, []);
+});
+
+test("active snapshots survive mode, schedule, pool and difficulty changes", () => {
+  const first = resolveMysterySession(alarm, undefined, {}, undefined, morning);
+  const changed = { ...alarm, missionMode: "manual" as const, hour: 8, mystery: { ...settings, games: [] } };
+  assert.doesNotThrow(() => validateWakeSession(changed, first));
+  assert.equal(resolveMysterySession(changed, first, { eventId: "test:active" }, undefined, morning + 60000), first);
+  assert.equal(resolveMysterySession(changed, first, { reminder: true }, undefined, morning + 86400000), first);
+  assert.equal(sameWakeSession(changed, first, { sessionId: "tomorrow" }, undefined, morning + 86400000), false);
+});
+
+test("mission-only edits preserve native delivery settings while delivery changes remain distinguishable", () => {
+  assert.equal(sameAlarmDeliverySettings(alarm, { ...alarm, missionMode: "manual", missions: [], mystery: { ...settings, games: [] }, wallpaper: "local-photo" }), true);
+  assert.equal(sameAlarmDeliverySettings(alarm, { ...alarm, sound: "lofi" }), false);
+  assert.equal(sameAlarmDeliverySettings(alarm, { ...alarm, hour: 9 }), false);
+  const inactiveCorrupt = { ...alarm, missionMode: "manual" as const, mystery: { games: null } as any };
+  assert.doesNotThrow(() => copyAlarm(inactiveCorrupt, "copy", []));
+});
+
+test("completed sessions clear their full snapshot and retain only bounded history for next-occurrence avoidance", () => {
+  const config = { ...settings, games: settings.games.slice(0, 2) };
+  const configured = { ...alarm, mystery: config };
+  const first = resolveMysterySession(configured, undefined, {}, undefined, morning, () => 0);
+  const before = { wakeSessions: { test: first }, mysteryHistory: {} };
+  const done = completeWakeSession(before, "test", morning + 1000);
+  assert.deepEqual(done.wakeSessions, {});
+  assert.equal(before.wakeSessions.test, first);
+  const history = done.mysteryHistory!.test;
+  assert.equal("missions" in history, false);
+  assert.equal("config" in history, false);
+  assert.throws(() => resolveMysterySession(configured, undefined, {}, undefined, morning + 2000, () => 0, history), WakeRoutineError);
+  const next = resolveMysterySession(configured, undefined, {}, undefined, morning + 86400000, () => 0, history);
+  assert.notDeepEqual(wakeHistory(next).gameplay, history.gameplay);
+});
+
+test("hydration migrates completed v3 records, prunes deleted alarms, and quarantines corrupt sessions", () => {
+  const first = resolveMysterySession(alarm, undefined, {}, undefined, morning);
+  const cleaned = cleanWakeData([alarm], { wakeSessions: { test: { ...first, completed: true }, deleted: first } });
+  assert.deepEqual(cleaned.wakeSessions, {});
+  assert.deepEqual(Object.keys(cleaned.mysteryHistory), ["test"]);
+  const corrupt = { ...first, missions: [] };
+  const restored = cleanWakeData([alarm], { wakeSessions: { test: corrupt }, mysteryHistory: { deleted: wakeHistory(first) } });
+  assert.deepEqual(restored.wakeSessions, {});
+  assert.deepEqual(restored.mysteryHistory, {});
+  assert.deepEqual(restored.wakeSessionRecovery.test.saved, corrupt);
+  for (const value of [null, [], "broken", { test: null }])
+    assert.ok(cleanWakeData([alarm], { wakeSessions: value as any }).wakeSessionRecovery.test);
+  assert.deepEqual(cleanWakeData([{ ...alarm, missionMode: "manual" }], { wakeSessions: null as any }).wakeSessionRecovery, {});
+});
+
+test("different alarms on the same day retain independent sessions and cleanup", () => {
+  const otherAlarm = { ...alarm, id: "other" };
+  const first = resolveMysterySession(alarm, undefined, {}, undefined, morning);
+  const other = resolveMysterySession(otherAlarm, undefined, {}, undefined, morning);
+  assert.notEqual(first.id, other.id);
+  const done = completeWakeSession({ wakeSessions: { test: first, other } }, "test");
+  assert.deepEqual(done.wakeSessions, { other });
+  assert.deepEqual(cleanWakeData([otherAlarm], done).mysteryHistory, {});
+});
+
+test("explicit dua recovery introduces no games and stays stable after settings are repaired", () => {
+  const broken = { ...alarm, mystery: { games: [], duaIds: ["protection" as const], fajr: true } };
+  const recovered = createDuaRecoverySession(broken, { sessionId: "original" }, undefined, morning, () => 0);
+  assert.doesNotThrow(() => validateWakeSession(broken, recovered));
+  assert.deepEqual(recovered.missions.map(m => m.kind), ["fajr_reminder", "supplication"]);
+  assert.deepEqual(recovered.missions[1].duaIds, ["protection"]);
+  assert.equal(resolveMysterySession(alarm, recovered, { sessionId: "original", reminder: true }, undefined, morning + 60000), recovered);
+  assert.deepEqual(wakeHistory(recovered).gameplay, []);
 });
