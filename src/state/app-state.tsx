@@ -43,6 +43,8 @@ type Data = WakeData & {
   fajrReminderIndex?: number;
   customSounds?: CustomSound[];
   silentMissions?: boolean;
+  wakeHandoffCompletions?: Record<string, { sessionId: string; completedAt: number; pendingCleanup?: string[] }>;
+  wakeHandoffCancellations?: string[];
   snoozed?: { alarmId: string; at: number; registration: Registration; sessionId?: string };
 };
 const initial: Data = {
@@ -89,7 +91,7 @@ type Context = {
   update(patch: Partial<Data>): Promise<void>;
   setMissionSilenced(alarmId: string | null, silent: boolean): Promise<void>;
   addCustomSound(sound: CustomSound): Promise<void>;
-  finish(alarm: Alarm, sessionId?: string): Promise<void>;
+  finish(alarm: Alarm, sessionId?: string, handoffSessionId?: string): Promise<void>;
   snooze(alarm: Alarm): Promise<void>;
   ensureWakeSession(alarm: Alarm, identity: WakeIdentity, recover?: boolean): Promise<WakeSession | null>;
 };
@@ -155,7 +157,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (
           !alarm.enabled ||
           alarm.days.length ||
-          AlarmKit?.activeAlarm?.() === alarm.id ||
+          (AlarmKit?.activeWakeup ? !!AlarmKit.activeWakeup(alarm.id) : AlarmKit?.activeAlarm?.() === alarm.id) ||
           before.snoozed?.alarmId === alarm.id
         )
           return alarm;
@@ -222,7 +224,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       validateAlarm(alarm);
       const old = current.current.alarms.find((a) => a.id === alarm.id);
       const active = current.current.wakeSessions?.[alarm.id] &&
-        (AndroidAlarm?.activeAlarm()?.alarmId === alarm.id || AlarmKit?.activeAlarm?.() === alarm.id);
+        (AndroidAlarm?.activeAlarm()?.alarmId === alarm.id || (AlarmKit?.activeWakeup ? !!AlarmKit.activeWakeup(alarm.id) : AlarmKit?.activeAlarm?.() === alarm.id));
       if (old && active) {
         if (!sameAlarmDeliverySettings(old, alarm))
           throw new Error("Finish the current wake-up before changing its time, repeat days, sound, volume or app blocking. Your edits are kept.");
@@ -288,6 +290,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           wakeSessions: Object.fromEntries(Object.entries(current.current.wakeSessions ?? {}).filter(([id]) => id !== alarm.id)),
           mysteryHistory: Object.fromEntries(Object.entries(current.current.mysteryHistory ?? {}).filter(([id]) => id !== alarm.id)),
           wakeSessionRecovery: Object.fromEntries(Object.entries(current.current.wakeSessionRecovery ?? {}).filter(([id]) => id !== alarm.id)),
+          wakeHandoffCompletions: Object.fromEntries(Object.entries(current.current.wakeHandoffCompletions ?? {}).filter(([id]) => id !== alarm.id)),
+          ...(AlarmKit?.completeWakeup ? { wakeHandoffCancellations: [...new Set([...(current.current.wakeHandoffCancellations ?? []), alarm.id])] } : {}),
           alarmOrder: current.current.alarmOrder?.filter(id => id !== alarm.id),
           snoozed:
             current.current.snoozed?.alarmId === alarm.id
@@ -300,7 +304,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     });
-  const finish = (alarm: Alarm, sessionId?: string) =>
+  const finish = (alarm: Alarm, sessionId?: string, handoffSessionId?: string) =>
     transaction(async () => {
       const session = current.current.wakeSessions?.[alarm.id];
       if (sessionId && session?.id !== sessionId) {
@@ -318,6 +322,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await cancelRegistration(current.current.snoozed.registration);
       if (!alarm.days.length) await cancelRegistration(alarm.registration);
       const today = new Date().toLocaleDateString("en-CA");
+      const nativeSessionId = handoffSessionId ?? (Platform.OS === "ios" ? session?.id ?? AlarmKit?.activeWakeup?.(alarm.id)?.sessionId : undefined);
+      const previousCompletion = current.current.wakeHandoffCompletions?.[alarm.id];
+      const pendingCleanup: string[] = [];
+      // Keep failed acknowledgements across later mornings. Otherwise replacing
+      // the latest completion marker could resurrect an older completed wake-up.
+      if (nativeSessionId && AlarmKit?.completeWakeup && previousCompletion) {
+        for (const id of new Set([previousCompletion.sessionId, ...(previousCompletion.pendingCleanup ?? [])])) {
+          if (id === nativeSessionId) continue;
+          try { await AlarmKit.completeWakeup(id, "completed"); }
+          catch { pendingCleanup.push(id); }
+        }
+      }
       await persist({
         ...current.current,
         snoozed:
@@ -330,25 +346,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : a,
         ),
         completions: [...new Set([...current.current.completions, today])],
+        ...(nativeSessionId && AlarmKit?.completeWakeup ? { wakeHandoffCompletions: {
+          ...current.current.wakeHandoffCompletions, [alarm.id]: { sessionId: nativeSessionId, completedAt: Date.now(), ...(pendingCleanup.length ? { pendingCleanup } : {}) },
+        } } : {}),
         ...completeWakeSession(current.current, alarm.id),
         fajrReminderIndex: fajrReminderIndex(fajrReminderIndex(current.current.fajrReminderIndex) +
           executed.filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
       });
-      AlarmKit?.completeAlarm?.(alarm.id);
+      if (nativeSessionId && AlarmKit?.completeWakeup) {
+        AlarmKit.logWakeHandoff?.("wake.completed", nativeSessionId, "js_persisted");
+        // JS completion is durable first. The routing coordinator retries native
+        // cleanup using that marker if a native write temporarily fails.
+        try { await AlarmKit.completeWakeup(nativeSessionId, "completed"); }
+        catch { AlarmKit.logWakeHandoff?.("cleanup.deferred", nativeSessionId, "completion_persisted"); }
+      } else AlarmKit?.completeAlarm?.(alarm.id);
     });
   const snooze = (alarm: Alarm) =>
     transaction(async () => {
       if (alarm.snooze === 0) throw new Error("Snooze is off for this alarm.");
       const at = Date.now() + alarm.snooze * 60000;
-      const registration = await scheduleAlarm(alarm, new Date(at));
+      const sessionId = current.current.wakeSessions?.[alarm.id]?.id ?? AlarmKit?.activeWakeup?.(alarm.id)?.sessionId;
+      const registration = await scheduleAlarm(alarm, new Date(at), undefined, { sessionId, kind: "snooze" });
       try {
         await cancelMissionTimeout();
         await stopAlarm(alarm);
         await cancelRegistration(current.current.snoozed?.registration);
         await persist({
           ...current.current,
-          snoozed: { alarmId: alarm.id, at, registration, sessionId: current.current.wakeSessions?.[alarm.id]?.id },
+          snoozed: { alarmId: alarm.id, at, registration, sessionId },
         });
+        if (sessionId) {
+          try { await AlarmKit?.deferWakeup?.(sessionId); }
+          catch { AlarmKit?.logWakeHandoff?.("cleanup.deferred", sessionId, "snooze_persisted"); }
+        }
       } catch (e) {
         await cancelRegistration(registration);
         throw e;
@@ -363,8 +393,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const previous = current.current.wakeSessions?.[alarm.id];
       const history = current.current.mysteryHistory?.[alarm.id];
       const native = AndroidAlarm?.activeAlarm();
+      const ios = !identity.sessionId ? AlarmKit?.activeWakeup?.(alarm.id) : null;
       const occurrence = {
         ...identity,
+        ...(ios ? { sessionId: ios.source === "legacy" && previous ? previous.id : ios.sessionId, eventId: ios.occurrenceId } : {}),
         ...(native?.alarmId === alarm.id ? { sessionId: native.sessionId ?? identity.sessionId, eventId: native.eventId } : {}),
       };
       // The active snapshot wins even if the alarm's mode or settings changed.

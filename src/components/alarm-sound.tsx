@@ -3,11 +3,10 @@ import { useFocusEffect } from "expo-router";
 import { AppState, Platform } from "react-native";
 import { Alarm } from "@/utils/alarms";
 import { resolveSoundId } from "@/utils/sounds";
-import { stopAlarm } from "@/services/scheduler";
+import AlarmKit from "@/services/alarm-kit";
 import { useSoundPlayer } from "./use-sound-player";
 import { Button } from "./ui";
 import AndroidAlarm from "@/services/android-alarm";
-import { cancelMissionTimeout } from "@/services/mission-timeout";
 
 export function AlarmSound({ alarm, preview, playPreview = false, ringing = false, silent = false, immediate = false }: { alarm: Alarm; preview: boolean; playPreview?: boolean; ringing?: boolean; silent?: boolean; immediate?: boolean }) {
   const { play, stop, error, playing } = useSoundPlayer();
@@ -31,7 +30,6 @@ export function AlarmSound({ alarm, preview, playPreview = false, ringing = fals
     if (resolveSoundId(alarm.sound) === "system" && !silent && Platform.OS !== "ios") return;
     let cancelled = false;
     let starting = false;
-    let transferred = false;
     const start = async () => {
       // AlarmKit must keep owning the audible lock-screen alarm until the app
       // is active. JS/audio work can suspend during an inactive/background handoff.
@@ -39,12 +37,11 @@ export function AlarmSound({ alarm, preview, playPreview = false, ringing = fals
       if (cancelled || starting || !canTransfer()) return;
       starting = true;
       try {
-        // Transfer the audible alarm to the foreground app, avoiding two players.
-        if (!preview && !transferred) {
-          if (ringing) await cancelMissionTimeout();
-          if (cancelled || !canTransfer()) return;
-          await stopAlarm(latest.current);
-          transferred = true;
+        // Mounting or resuming a route must never stop an audible native alarm.
+        // The system Stop intent or the explicit Wake up button owns that action.
+        if (Platform.OS === "ios" && !preview && AlarmKit?.isSupported()) {
+          const active = await AlarmKit.getAlarms();
+          if (active.some(a => a.state === "alerting" && (a.alarmId === alarm.id || latest.current.registration?.ids.includes(a.id)))) return;
         }
         if (!cancelled && !silent && canTransfer()) {
           // The system tone has no foreground audio asset; use the bundled beep.
@@ -58,7 +55,7 @@ export function AlarmSound({ alarm, preview, playPreview = false, ringing = fals
     if (!preview || playPreview) void start();
     const recover = () => {
       if ((!preview || playPreview) && AppState.currentState === "active" &&
-          ((!preview && !transferred) || (!silent && (playback.current.error || !playback.current.playing)))) void start();
+          (!silent && (playback.current.error || !playback.current.playing))) void start();
     };
     // AlarmKit can still own the audio session while the app is opening.
     // Retry automatically when it releases the session or the app resumes.

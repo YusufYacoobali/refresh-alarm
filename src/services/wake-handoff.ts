@@ -1,0 +1,93 @@
+import { Platform } from "react-native";
+import AlarmKit from "./alarm-kit";
+import AndroidAlarm from "./android-alarm";
+import { readMissionTimeout } from "./mission-timeout";
+import { wakeOccurrenceKey } from "@/utils/wake-session";
+import type { NativeWakeHandoff, WakeCandidate, WakeRoutingData } from "@/utils/wake-handoff";
+
+function token(value: string) {
+  let result = 2166136261;
+  for (let i = 0; i < value.length; i++) result = Math.imul(result ^ value.charCodeAt(i), 16777619) >>> 0;
+  return result.toString(16);
+}
+export function logWakeHandoff(event: string, id = "", reason = "") {
+  if (Platform.OS === "ios" && AlarmKit?.logWakeHandoff) AlarmKit.logWakeHandoff(event, id, reason);
+  else if (__DEV__) console.info("[AlarmTiming]", { event, key: token(id), reason, at: Date.now() });
+}
+export const acknowledgeWakeup = async (target: WakeCandidate, reason: "completed" | "deleted") => {
+  if (target.native) await AlarmKit?.completeWakeup?.(target.sessionId, reason);
+};
+function alarmForRegistration(data: WakeRoutingData, id: string) {
+  return data.alarms.find(a => a.registration?.ids.includes(id))?.id ??
+    (data.snoozed?.registration.ids.includes(id) ? data.snoozed.alarmId : undefined);
+}
+function validateNative(record: NativeWakeHandoff) {
+  if (!record || typeof record.alarmId !== "string" || !record.alarmId || typeof record.occurrenceId !== "string" || !record.occurrenceId ||
+    typeof record.sessionId !== "string" || !record.sessionId || typeof record.registrationId !== "string" || !record.registrationId ||
+    !Number.isFinite(record.createdAt) || !Number.isFinite(record.scheduledAt) ||
+    !["scheduled", "snooze", "timeout"].includes(record.kind) || !["stop", "alerting", "legacy"].includes(record.source) || typeof record.deferred !== "boolean")
+    throw new Error("Native wake-up handoff could not be read.");
+}
+/** Called by the single routing coordinator on boot, resume and native events.
+ * A scheduled clock time by itself is never evidence of an AlarmKit delivery. */
+export async function readNativeWakeups(data: WakeRoutingData): Promise<WakeCandidate[]> {
+  if (AndroidAlarm) {
+    const active = AndroidAlarm.activeAlarm();
+    const reminder = active?.eventId.includes(":reminder:");
+    const snoozed = data.snoozed;
+    const snoozeDelivery = active && snoozed?.alarmId === active.alarmId &&
+      snoozed.registration.ids.some(id => active.eventId.startsWith(`${id}:`));
+    return active ? [{ id: active.alarmId, eventId: active.eventId,
+      sessionId: (snoozeDelivery ? snoozed?.sessionId : undefined) ?? active.sessionId ??
+        (reminder ? data.wakeSessions?.[active.alarmId]?.id : undefined) ?? active.eventId,
+      kind: snoozeDelivery ? "snooze" : "scheduled",
+      createdAt: 0, reminder: reminder ? "1" : undefined, durable: true }] : [];
+  }
+  if (Platform.OS !== "ios" || !AlarmKit?.isSupported()) return [];
+  if (!AlarmKit.pendingWakeups) {
+    // Compatibility is non-destructive. Never call consumePendingAlarm here.
+    const pending = AlarmKit.activeAlarm?.();
+    const observed = await AlarmKit.getAlarms().catch(error => {
+      if (!pending) throw error;
+      logWakeHandoff("handoff.observe.deferred", "", "legacy_pending_retained"); return [];
+    });
+    const ids = [...new Set([...(pending ? [pending] : []), ...observed.filter(a => a.state === "alerting").flatMap(a => {
+      const id = alarmForRegistration(data, a.id); return id ? [id] : [];
+    })])];
+    return ids.flatMap(id => {
+      const alarm = data.alarms.find(a => a.id === id);
+      if (!alarm) return [];
+      const sessionId = data.wakeSessions?.[id]?.id ?? wakeOccurrenceKey(alarm, Date.now());
+      return [{ id, eventId: `${sessionId}:legacy-active`, sessionId, createdAt: 0, durable: true }];
+    });
+  }
+  let records = await AlarmKit.pendingWakeups();
+  // Old scheduled registrations lack the new native mapping. Recover them only
+  // after an actual .alerting observation, with native confirmation before write.
+  if (!records.length) {
+    for (const native of (await AlarmKit.getAlarms()).filter(a => a.state === "alerting")) {
+      const id = alarmForRegistration(data, native.id);
+      if (id) await AlarmKit.captureAlertingWakeup?.(native.id, id);
+    }
+    records = await AlarmKit.pendingWakeups();
+  }
+  records.forEach(validateNative);
+  const timeout = await readMissionTimeout().catch(() => { logWakeHandoff("timeout.read.failed", "", "native_pending_retained"); return null; });
+  const candidates: WakeCandidate[] = [];
+  for (const record of records) {
+    let sessionId = record.sessionId;
+    const saved = data.wakeSessions?.[record.alarmId];
+    if (record.source === "legacy" && saved && saved.id !== sessionId) {
+      await AlarmKit.adoptWakeup?.(record.occurrenceId, saved.id);
+      sessionId = saved.id;
+    }
+    const expiredMission = timeout?.alarmId === record.alarmId && timeout.deadline <= Date.now() &&
+      (!timeout.sessionId || timeout.sessionId === sessionId);
+    const reminderEvent = expiredMission && record.kind !== "timeout" && timeout.registration.kind === "alarmkit" && timeout.registration.ids[0]
+      ? `${timeout.registration.ids[0]}:${timeout.deadline}` : record.occurrenceId;
+    candidates.push({ id: record.alarmId, eventId: reminderEvent,
+      sessionId, createdAt: record.createdAt, reminder: record.kind === "timeout" || expiredMission ? "1" : undefined,
+      kind: record.kind, deferred: record.deferred, durable: true, native: true });
+  }
+  return candidates;
+}

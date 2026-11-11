@@ -30,7 +30,7 @@ export function useMissionReminder(alarm: Alarm | undefined, preview: boolean, e
       const occurrence = eventId ?? AndroidAlarm?.activeAlarm()?.eventId;
       const setup = AndroidAlarm && occurrence
         ? AndroidAlarm.missionActivityWithLimit ? AndroidAlarm.missionActivityWithLimit(occurrence, limitMs) : AndroidAlarm.missionActivity(occurrence)
-        : startMissionTimeout(latest.current!, deadline, token);
+        : startMissionTimeout(latest.current!, deadline, token, sessionId);
       void setup.catch(() => { if (!disposed) setError(true); });
     }
     const check = () => {
@@ -52,7 +52,7 @@ export function useMissionReminder(alarm: Alarm | undefined, preview: boolean, e
       disposed = true;
       clearInterval(timer);
       resume.remove();
-      if (!preview) void cancelMissionTimeout(token).catch(() => {});
+      if (!preview && !expired.current) void cancelMissionTimeout(token, true).catch(() => {});
     };
   }, [enabled, alarm?.id, preview, eventId, sessionId, missionStep, kind, difficulty, rounds, duaIds, previewSequence, limitMs]));
   const isExpired = useCallback(() => expired.current || (deadlineRef.current > 0 && Date.now() >= deadlineRef.current), []);

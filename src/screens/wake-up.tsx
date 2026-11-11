@@ -7,6 +7,8 @@ import { useMissionReminder } from "@/components/use-mission-reminder";
 import { SupplicationMission } from "@/components/supplication-mission";
 import { selectedSupplications, orderedSupplications } from "@/utils/supplications";
 import { generateMysterySequence } from "@/utils/mystery-sequence";
+import { cancelMissionTimeout } from "@/services/mission-timeout";
+import { stopAlarm } from "@/services/scheduler";
 import { WakeRoutineError, type WakeSession } from "@/utils/wake-session";
 import { NumberTrail, TileRecall, PatternEcho } from "@/components/focus-missions";
 import { FajrReminderMission } from "@/components/fajr-reminder-mission";
@@ -167,13 +169,18 @@ export function Ringing() {
     acting.current = true;
     setWorking(true);
     try {
-      if (routine.missions.length)
+      if (routine.missions.length) {
+        if (!isPreview && Platform.OS === "ios") {
+          await cancelMissionTimeout();
+          await stopAlarm(alarm!);
+        }
         router.replace({
           pathname: "/challenge",
           params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, sessionId: routine.session?.id ?? sessionId, reminder, ...(isPreview ? { kind, difficulty, rounds, duaIds, previewSequence: routine.previewSequence } : {}) },
         });
+      }
       else {
-        await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
+        await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!, undefined, sessionId); });
         router.replace({
           pathname: "/success",
           params: { preview: isPreview ? "1" : "0" },
@@ -642,7 +649,7 @@ function ChallengeRun({ wake, routine, previewSequence, session, mystery }: { wa
     finishing.current = true;
     setWorking(true);
     try {
-      await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!, session?.id); });
+      await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!, session?.id, sessionId); });
       router.replace({
         pathname: "/success",
         params: { preview: isPreview ? "1" : "0" },

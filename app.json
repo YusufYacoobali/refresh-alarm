@@ -38,6 +38,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-alarm-handoff.cjs",
       "expo-image",
       "expo-font",
       [
