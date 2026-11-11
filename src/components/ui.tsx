@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
+  Platform,
   Text,
   Pressable,
   ScrollView,
@@ -158,7 +159,9 @@ export function Card({
   animated?: boolean;
 }) {
   const { reduced } = useMotion();
-  if (!animated) return <View style={[s.card, style]}>{children}</View>;
+  // Expanding Android cards need Yoga's current bounds for drawing and taps.
+  // Reanimated layout transitions can leave clipped descendants at old bounds.
+  if (!animated || Platform.OS === "android") return <View style={[s.card, style]}>{children}</View>;
   return <Animated.View entering={reduced ? undefined : FadeIn.duration(220)} layout={reduced ? undefined : LinearTransition.duration(220)} style={[s.card, style, { transitionProperty: ["backgroundColor", "borderColor", "opacity"], transitionDuration: reduced ? 0 : 180 }]}>{children}</Animated.View>;
 }
 export function Row({
@@ -190,7 +193,7 @@ export function Row({
       </T>
       {children ?? (
         <>
-          <Animated.View key={value} entering={reduced ? undefined : FadeInUp.duration(180)} style={{ maxWidth: "43%" }}><T
+          <Animated.View key={value} entering={reduced || Platform.OS === "android" ? undefined : FadeInUp.duration(180)} style={{ maxWidth: "43%" }}><T
             variant="small"
             style={{ color: c.muted, textAlign: "right" }}
           >
@@ -226,8 +229,8 @@ export function Screen({
   return scroll ? (
     <Animated.ScrollView
       ref={scrollRef}
-      removeClippedSubviews={removeClippedSubviews}
-      entering={reduced ? undefined : FadeIn.duration(220)}
+      removeClippedSubviews={removeClippedSubviews ?? (Platform.OS === "android" ? false : undefined)}
+      entering={reduced || Platform.OS === "android" ? undefined : FadeIn.duration(220)}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentInsetAdjustmentBehavior={safeTop ? "never" : "automatic"}
       automaticallyAdjustContentInsets={!safeTop}
@@ -310,8 +313,8 @@ export function Enter({
   const { reduced } = useMotion();
   return (
     <Animated.View
-      entering={reduced ? undefined : FadeInDown.duration(280).delay(delay)}
-      layout={reduced ? undefined : LinearTransition.duration(240)}
+      entering={reduced || Platform.OS === "android" ? undefined : FadeInDown.duration(280).delay(delay)}
+      layout={reduced || Platform.OS === "android" ? undefined : LinearTransition.duration(240)}
       style={style}
     >
       {children}

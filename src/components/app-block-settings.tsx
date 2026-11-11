@@ -82,8 +82,8 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
       setSearch("");
     }
   }
-  return <Card>
-    <Row icon="shield-checkmark-outline" title="Block distracting apps" value={alarm.appBlock?.enabled ? `${group === "social" ? "Social · " : ""}${minutes} min` : "Off"} onPress={() => setOpen(!open)} last={!open} />
+  return <><Card animated={Platform.OS !== "android"}>
+    <Row icon="shield-checkmark-outline" title="Block distracting apps" value={alarm.appBlock?.enabled ? `${group === "social" ? "Social · " : ""}${minutes} min` : "Off"} onPress={() => setOpen(value => !value)} last={!open} />
     {open && <View style={{ padding: 18, gap: 14 }}>
       <T>Give yourself a scroll-free start.</T>
       <T variant="small" style={{ color: c.muted }}>Blocks your chosen apps for {minutes} minutes from when this alarm rings. Finishing missions early keeps the block running. A snoozed alarm starts a new block when it rings.</T>
@@ -94,7 +94,7 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
       </View>}
       {group === "social" && <T variant="small" testID="social-apps-summary" style={{ color: c.lavender }}>{SOCIAL_APPS.map(app => app.name).join(" · ")}</T>}
       <T>Block duration</T>
-      <Host style={{ minHeight: 44, width: "100%" }} colorScheme="dark" seedColor={c.lavender} accessibilityLabel="App block duration">
+      <Host style={Platform.OS === "android" ? { height: 56, width: "100%" } : { minHeight: 44, width: "100%" }} colorScheme="dark" seedColor={c.lavender} accessibilityLabel="App block duration">
         <Picker testID="app-block-duration" enabled={!working} selectedValue={minutes} onValueChange={value => updateBlock({ minutes: value })}>
           {APP_BLOCK_MINUTES.map(value => <Picker.Item key={value} value={value} label={`${value} minutes`} />)}
         </Picker>
@@ -125,6 +125,7 @@ export function AppBlockSettings({ alarm, onChange }: { alarm: Alarm; onChange(p
       {alarm.appBlock?.enabled && !available && <Button title="Turn off app blocking" onPress={() => onChange({ appBlock: { ...alarm.appBlock!, enabled: false } })} />}
       {error && <T accessibilityLiveRegion="assertive" style={{ color: c.danger }}>{error}</T>}
     </View>}
+  </Card>
     {showDisclosure && <AppBlockDisclosure onAgree={agreeToAccess} onDecline={closeDisclosure} />}
-  </Card>;
+  </>;
 }

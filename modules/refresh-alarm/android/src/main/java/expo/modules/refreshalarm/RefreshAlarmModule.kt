@@ -51,7 +51,8 @@ class RefreshAlarmModule : Module() {
     Function("activeAlarm") {
       val active = AlarmStore.active(context)
       appContext.currentActivity?.let { activity -> activity.runOnUiThread { AlarmWindow.update(activity) } }
-      active?.let { mapOf("alarmId" to it.getString("alarmId"), "eventId" to it.getString("eventId")) }
+      active?.let { mapOf("alarmId" to it.getString("alarmId"), "eventId" to it.getString("eventId"),
+        "sessionId" to it.optString("sessionId", "${it.getString("id")}:${it.optLong("scheduledAt")}")) }
     }
     AsyncFunction("setMissionSilenced") { eventId: String, silent: Boolean ->
       AlarmRingService.silenceMission(eventId, silent)

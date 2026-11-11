@@ -6,7 +6,9 @@ export default defineConfig({
   use: {
     baseURL: process.env.DAYBREAK_TEST_URL ?? "http://localhost:8081",
     viewport: { width: 390, height: 844 },
-    launchOptions: { channel: "msedge" },
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : { channel: "msedge" },
     screenshot: "only-on-failure",
   },
   reporter: "list",

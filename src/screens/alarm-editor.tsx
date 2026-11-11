@@ -96,7 +96,7 @@ export function AlarmEditor() {
   }
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-    <Screen style={{ gap: 12 }}>
+    <Screen style={{ gap: 12 }} removeClippedSubviews={Platform.OS === "android" ? false : undefined}>
       <View style={{ gap: 4 }}>
         <TimeDial
           hour={draft.hour}
@@ -125,7 +125,7 @@ export function AlarmEditor() {
           onPress={() => setRepeatOpen(!repeatOpen)}
         />
         {repeatOpen && (
-          <Animated.View entering={reduced ? undefined : FadeInDown.duration(220)} exiting={reduced ? undefined : FadeOutUp.duration(160)} layout={reduced ? undefined : LinearTransition.duration(240)} style={{ padding: 16, gap: 14 }}>
+          <Animated.View entering={reduced || Platform.OS === "android" ? undefined : FadeInDown.duration(220)} exiting={reduced || Platform.OS === "android" ? undefined : FadeOutUp.duration(160)} layout={reduced || Platform.OS === "android" ? undefined : LinearTransition.duration(240)} style={{ padding: 16, gap: 14 }}>
             <View style={{ flexDirection: "row", gap: 5 }}>
               {[1, 2, 3, 4, 5, 6, 0].map((day) => (
                 <Tap
@@ -240,7 +240,7 @@ export function AlarmEditor() {
           last={section !== "missions"}
         />
         {section === "missions" && <>
-        <Row icon="extension-puzzle-outline" title="Choose missions" value={draft.missions?.length ? `${draft.missions.length} selected` : "Choose your routine"} onPress={() => router.push({ pathname: "/challenges", params: { editing: "1" } })} />
+        <Row icon="extension-puzzle-outline" title="Choose missions" value={draft.missionMode === "mystery" ? "Mystery Mode" : draft.missions?.length ? `${draft.missions.length} selected` : "Choose your routine"} onPress={() => router.push({ pathname: "/challenges", params: { editing: "1" } })} />
         <Row icon="volume-mute-outline" title="Silent during missions">
           <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? data.silentMissions ?? true} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>

@@ -44,10 +44,7 @@ test("silent missions mute across mission changes, can be unmuted, and finish cl
   await expect.poll(() => page.locator("audio").evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Silence mission sound", exact: true }).click();
   await expect(page.locator("audio")).toHaveCount(0);
-  for (let i = 0; i < 3; i++) {
-    const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
-    await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
-  }
+  await solveMath(page);
   await expect(page.getByText("Mission 2 of 2", { exact: true })).toBeVisible();
   await expect(page.locator("audio")).toHaveCount(0);
   await solveMemory(page);

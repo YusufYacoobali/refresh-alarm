@@ -13,6 +13,7 @@ import AndroidAlarm from "@/services/android-alarm";
 import { cancelMissionTimeout } from "@/services/mission-timeout";
 import { fajrReminderIndex } from "@/utils/fajr-reminders";
 import { CustomSound, setCustomSounds } from "@/utils/sounds";
+import { resolveMysterySession, validateWakeSession, type WakeIdentity, type WakeSession } from "@/utils/wake-session";
 import {
   Alarm,
   Registration,
@@ -41,7 +42,8 @@ type Data = {
   fajrReminderIndex?: number;
   customSounds?: CustomSound[];
   silentMissions?: boolean;
-  snoozed?: { alarmId: string; at: number; registration: Registration };
+  wakeSessions?: Record<string, WakeSession>;
+  snoozed?: { alarmId: string; at: number; registration: Registration; sessionId?: string };
 };
 const initial: Data = {
   version: 1,
@@ -89,6 +91,7 @@ type Context = {
   addCustomSound(sound: CustomSound): Promise<void>;
   finish(alarm: Alarm): Promise<void>;
   snooze(alarm: Alarm): Promise<void>;
+  ensureWakeSession(alarm: Alarm, identity: WakeIdentity): Promise<WakeSession>;
 };
 const Ctx = createContext<Context | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -99,6 +102,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [draft, setDraft] = useState<Alarm | null>(null);
   const current = useRef(data),
     locked = useRef(false);
+  const wakeQueue = useRef<Promise<unknown>>(Promise.resolve());
   const hydrate = async () => {
     setError(null);
     try {
@@ -114,6 +118,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         )
           throw new Error("Saved data could not be read.");
         parsed.alarms.forEach(validateAlarm);
+        if (parsed.wakeSessions !== undefined) {
+          if (!parsed.wakeSessions || typeof parsed.wakeSessions !== "object" || Array.isArray(parsed.wakeSessions))
+            throw new Error("Saved wake-up sessions could not be read.");
+          for (const alarm of parsed.alarms) {
+            const session = parsed.wakeSessions[alarm.id];
+            if (session) validateWakeSession(alarm, session);
+          }
+        }
         if (parsed.alarmOrder && (!Array.isArray(parsed.alarmOrder) || parsed.alarmOrder.some(id => typeof id !== "string")))
           throw new Error("Saved alarm order could not be read.");
         if (parsed.customSounds && !Array.isArray(parsed.customSounds)) throw new Error("Saved sounds could not be read.");
@@ -268,6 +280,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await persist({
           ...current.current,
           alarms: current.current.alarms.filter((a) => a.id !== alarm.id),
+          wakeSessions: Object.fromEntries(Object.entries(current.current.wakeSessions ?? {}).filter(([id]) => id !== alarm.id)),
           alarmOrder: current.current.alarmOrder?.filter(id => id !== alarm.id),
           snoozed:
             current.current.snoozed?.alarmId === alarm.id
@@ -300,8 +313,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : a,
         ),
         completions: [...new Set([...current.current.completions, today])],
+        ...(current.current.wakeSessions?.[alarm.id] ? { wakeSessions: {
+          ...current.current.wakeSessions,
+          [alarm.id]: { ...current.current.wakeSessions[alarm.id], completed: true },
+        } } : {}),
         fajrReminderIndex: fajrReminderIndex(fajrReminderIndex(current.current.fajrReminderIndex) +
-          alarmMissions(alarm).filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
+          (alarm.missionMode === "mystery" ? current.current.wakeSessions?.[alarm.id]?.missions ?? [] : alarmMissions(alarm)).filter(m => m.kind === "fajr_reminder").reduce((count, m) => count + missionRounds(m), 0)),
       });
       AlarmKit?.completeAlarm?.(alarm.id);
     });
@@ -311,17 +328,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const at = Date.now() + alarm.snooze * 60000;
       const registration = await scheduleAlarm(alarm, new Date(at));
       try {
+        await cancelMissionTimeout();
         await stopAlarm(alarm);
         await cancelRegistration(current.current.snoozed?.registration);
         await persist({
           ...current.current,
-          snoozed: { alarmId: alarm.id, at, registration },
+          snoozed: { alarmId: alarm.id, at, registration, sessionId: current.current.wakeSessions?.[alarm.id]?.id },
         });
       } catch (e) {
         await cancelRegistration(registration);
         throw e;
       }
     });
+  const ensureWakeSession = (alarm: Alarm, identity: WakeIdentity): Promise<WakeSession> => {
+    // Ringing and cold-launch challenge routes may arrive together. Serialize
+    // generation and persist before exposing any generated mission to the UI.
+    const work = wakeQueue.current.then(async () => {
+      const previous = current.current.wakeSessions?.[alarm.id];
+      const native = AndroidAlarm?.activeAlarm();
+      const session = resolveMysterySession(alarm, previous, {
+        ...identity,
+        ...(native?.alarmId === alarm.id ? { sessionId: native.sessionId, eventId: native.eventId } : {}),
+      }, current.current.snoozed);
+      if (session !== previous) await transaction(() => persist({
+        ...current.current,
+        wakeSessions: { ...current.current.wakeSessions, [alarm.id]: session },
+      }));
+      return session;
+    });
+    wakeQueue.current = work.catch(() => {});
+    return work;
+  };
   useEffect(() => {
     if (!ready || !AndroidAlarm) return;
     let migrating = false;
@@ -367,6 +404,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reorderAlarms,
         finish,
         snooze,
+        ensureWakeSession,
       }}
     >
       {children}

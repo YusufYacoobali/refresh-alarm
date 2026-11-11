@@ -118,7 +118,7 @@ export function AlarmCard({
         <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
           <Icon
             name={
-              alarmMissions(alarm).length === 0
+              alarm.missionMode !== "mystery" && alarmMissions(alarm).length === 0
                 ? "sunny-outline"
                 : "extension-puzzle-outline"
             }
@@ -126,7 +126,7 @@ export function AlarmCard({
             color={c.lavender}
           />
           <T variant="small" style={{ color: c.lavender, fontSize: 10 }}>
-            {alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
+            {alarm.missionMode === "mystery" ? "Mystery Mode" : alarmMissions(alarm).length > 1 ? `${alarmMissions(alarm).length} missions` : alarmMissions(alarm)[0] ? missionLabel(alarmMissions(alarm)[0]) : "No missions"}
           </T>
           <AlarmActionsMenu label={description} disabled={busy}
             onPreview={() => {

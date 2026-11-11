@@ -17,7 +17,7 @@ for (const route of ["ringing", "challenge"]) {
     });
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto(`/${route}?id=error-layer`);
-    await page.getByRole("button", { name: route === "ringing" ? "A little longer · 5 min" : "Finish waking up", exact: true }).click();
+    await page.getByRole("button", { name: route === "ringing" ? "Hello, new day" : "Finish waking up", exact: true }).click();
     const message = page.getByTestId("screen-error-message");
     await expect(message).toBeInViewport();
     await expect(message.getByRole("alert")).toContainText("Alarm permission is off.");
@@ -27,12 +27,12 @@ for (const route of ["ringing", "challenge"]) {
       const layer = el.closest('[data-testid="screen-error-layer"]');
       const button = el.querySelector('[aria-label="Dismiss message"]')!;
       const rect = button.getBoundingClientRect();
-      const belongsToScreen = layer?.textContent?.includes(route === "ringing" ? "Permission test" : "Finish waking up");
+      const belongsToScreen = layer?.textContent?.includes(route === "ringing" ? "Hello, new day" : "Finish waking up");
       return !!belongsToScreen && el.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
     }, route)).toBe(true);
     await message.getByRole("button", { name: "Dismiss message" }).click();
     await expect(message).toHaveCount(0);
-    await page.getByRole("button", { name: route === "ringing" ? "A little longer · 5 min" : "Finish waking up", exact: true }).click();
+    await page.getByRole("button", { name: route === "ringing" ? "Hello, new day" : "Finish waking up", exact: true }).click();
     await expect(page).not.toHaveURL(new RegExp(`/${route}\\?`));
   });
 }

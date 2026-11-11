@@ -17,6 +17,27 @@ export type Mission = {
   rounds?: number;
   duaIds?: SupplicationId[];
 };
+export const GAMEPLAY_KINDS = ["math", "memory", "shake", "number_order", "color_focus", "sequence"] as const;
+export type GameplayKind = (typeof GAMEPLAY_KINDS)[number];
+export type MysterySettings = {
+  games: (Mission & { kind: GameplayKind })[];
+  duaIds: SupplicationId[];
+  fajr: boolean;
+};
+export function defaultMysterySettings(): MysterySettings {
+  return { games: GAMEPLAY_KINDS.map(kind => ({ kind, difficulty: "gentle" })), duaIds: supplications.map(d => d.id), fajr: false };
+}
+export function validateMystery(settings: MysterySettings) {
+  if (!settings || !Array.isArray(settings.games) || settings.games.length < 2 || settings.games.length > 6 ||
+      new Set(settings.games.map(m => m?.kind)).size !== settings.games.length ||
+      settings.games.some(m => !m || !GAMEPLAY_KINDS.includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) ||
+        (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))))
+    throw new Error("Choose at least two different Mystery games with valid difficulty and rounds.");
+  if (!Array.isArray(settings.duaIds) || !settings.duaIds.length || new Set(settings.duaIds).size !== settings.duaIds.length ||
+      settings.duaIds.some(id => !supplications.some(d => d.id === id)))
+    throw new Error("Choose at least one morning dua for Mystery Mode.");
+  if (typeof settings.fajr !== "boolean") throw new Error("Choose a valid Fajr reminder preference.");
+}
 export const MAX_MISSION_ROUNDS = 10;
 export const missionSupportsRounds = (kind?: Mission["kind"]) => kind !== "fajr_reminder" && kind !== "supplication";
 export function missionRounds(mission?: Pick<Mission, "rounds"> & Partial<Pick<Mission, "kind">>) {
@@ -41,6 +62,9 @@ export type Alarm = {
   difficulty: "gentle" | "bright";
   /** Ordered missions. Undefined reads the legacy single-mission settings. */
   missions?: Mission[];
+  /** Absent on legacy alarms: always Manual. Manual settings remain in missions. */
+  missionMode?: "manual" | "mystery";
+  mystery?: MysterySettings;
   /** Older alarms keep ringing during missions unless explicitly silenced. */
   silentMissions?: boolean;
   /** Undefined preserves the device volume for alarms saved before volume controls. */
@@ -73,7 +97,7 @@ export function copyAlarm(alarm: Alarm, id: string, existingLabels: string[]): A
     label = `${alarm.label.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
     number += 1;
   } while (labels.has(label));
-  return { ...settings, id, label, days: [...alarm.days], ...(alarm.appBlock ? { appBlock: { ...alarm.appBlock } } : {}), missions: alarm.missions?.map(m => ({ ...m, ...(m.duaIds ? { duaIds: [...m.duaIds] } : {}) })) };
+  return { ...settings, id, label, days: [...alarm.days], ...(alarm.appBlock ? { appBlock: { ...alarm.appBlock } } : {}), ...(alarm.mystery ? { mystery: { ...alarm.mystery, games: alarm.mystery.games.map(m => ({ ...m })), duaIds: [...alarm.mystery.duaIds] } } : {}), missions: alarm.missions?.map(m => ({ ...m, ...(m.duaIds ? { duaIds: [...m.duaIds] } : {}) })) };
 }
 export const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const challengeNames: Record<Challenge, string> = {
@@ -95,7 +119,8 @@ export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "dif
     return selection;
   });
 }
-export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty">) {
+export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty" | "missionMode" | "mystery">) {
+  if (alarm.missionMode === "mystery") return `Mystery · 2–${Math.min(4, alarm.mystery?.games.length ?? 6)} games · Morning duas${alarm.mystery?.fajr ? " · Fajr" : ""}`;
   const missions = alarmMissions(alarm);
   return missions.length ? missions.map(missionLabel).join(" → ") : "No missions";
 }
@@ -164,6 +189,10 @@ export function nextAlarmAt(
   return Number.isFinite(next) ? new Date(next) : null;
 }
 export function validateAlarm(a: Alarm) {
+  if (a.missionMode !== undefined && !["manual", "mystery"].includes(a.missionMode))
+    throw new Error("Choose Manual or Mystery Mode.");
+  if (a.mystery !== undefined) validateMystery(a.mystery);
+  if (a.missionMode === "mystery" && !a.mystery) throw new Error("Choose your Mystery games and morning duas.");
   if (
     !Number.isInteger(a.hour) ||
     a.hour < 0 ||

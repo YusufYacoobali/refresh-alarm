@@ -5,7 +5,8 @@ import { AlarmSound } from "@/components/alarm-sound";
 import { AppBlockStatus } from "@/components/app-block-status";
 import { useMissionReminder } from "@/components/use-mission-reminder";
 import { SupplicationMission } from "@/components/supplication-mission";
-import { selectedSupplications } from "@/utils/supplications";
+import { selectedSupplications, orderedSupplications } from "@/utils/supplications";
+import { generateMysterySequence } from "@/utils/mystery-sequence";
 import { NumberTrail, TileRecall, PatternEcho } from "@/components/focus-missions";
 import { FajrReminderMission } from "@/components/fajr-reminder-mission";
 import { fajrReminderIndex } from "@/utils/fajr-reminders";
@@ -41,6 +42,7 @@ import {
   ALARM_NAMING_ENABLED,
   Mission,
   challengeNames,
+  validateAlarm,
 } from "@/utils/alarms";
 import { art, colors as c, fonts } from "@/theme";
 
@@ -66,6 +68,8 @@ function useWakeAlarm() {
     difficulty?: "gentle" | "bright";
     rounds?: string;
     duaIds?: string;
+    sessionId?: string;
+    previewSequence?: string;
   }>();
   const { data } = useApp();
   return {
@@ -76,6 +80,35 @@ function useWakeAlarm() {
         : data.alarms.find((a) => a.id === params.id),
     isPreview: params.preview === "1",
   };
+}
+type WakeAlarm = ReturnType<typeof useWakeAlarm>;
+function useWakeRoutine(wake: WakeAlarm) {
+  const { ensureWakeSession } = useApp();
+  const { alarm, isPreview, kind, eventId, sessionId, reminder, previewSequence } = wake;
+  const mystery = alarm?.missionMode === "mystery" && !(isPreview && kind);
+  const key = `${alarm?.id}:${eventId ?? ""}:${sessionId ?? ""}:${reminder ?? ""}:${isPreview}:${previewSequence ?? ""}`;
+  const [loaded, setLoaded] = useState<{ key: string; missions: Mission[] }>();
+  const [error, setError] = useState<string>();
+  const [attempt, retry] = useState(0);
+  useEffect(() => {
+    if (!mystery || !alarm) return;
+    let disposed = false;
+    setError(undefined);
+    const prepare = async () => {
+      if (!isPreview) return (await ensureWakeSession(alarm, { eventId, sessionId, reminder: reminder === "1" })).missions;
+      if (previewSequence) {
+        const missions: Mission[] = JSON.parse(previewSequence);
+        validateAlarm({ ...alarm, missionMode: "manual", missions });
+        return missions;
+      }
+      return generateMysterySequence(alarm.mystery!);
+    };
+    void prepare().then(missions => { if (!disposed) setLoaded({ key, missions }); })
+      .catch(e => { if (!disposed) setError(e instanceof Error ? e.message : "Couldn’t prepare your routine."); });
+    return () => { disposed = true; };
+  }, [key, mystery, attempt]);
+  const missions = !mystery ? alarm ? alarmMissions(alarm) : [] : loaded?.key === key ? loaded.missions : undefined;
+  return { missions, error, retry: () => retry(n => n + 1), previewSequence: mystery && isPreview && missions ? JSON.stringify(missions) : undefined };
 }
 function usePreventBack() {
   useEffect(() => {
@@ -95,7 +128,9 @@ function MissingAlarm() {
   );
 }
 export function Ringing() {
-  const { alarm, isPreview, eventId, reminder, kind, difficulty, rounds, duaIds } = useWakeAlarm();
+  const wake = useWakeAlarm();
+  const { alarm, isPreview, eventId, sessionId, reminder, kind, difficulty, rounds, duaIds } = wake;
+  const routine = useWakeRoutine(wake);
   const { finish, busy } = useApp();
   const insets = useSafeAreaInsets();
   const acting = useRef(false);
@@ -103,14 +138,14 @@ export function Ringing() {
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
   async function stop() {
-    if (acting.current || busy) return;
+    if (acting.current || busy || !routine.missions) return;
     acting.current = true;
     setWorking(true);
     try {
-      if (alarmMissions(alarm!).length)
+      if (routine.missions.length)
         router.replace({
           pathname: "/challenge",
-          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, ...(isPreview ? { kind, difficulty, rounds, duaIds } : {}) },
+          params: { id: alarm!.id, preview: isPreview ? "1" : "0", eventId, sessionId, reminder, ...(isPreview ? { kind, difficulty, rounds, duaIds, previewSequence: routine.previewSequence } : {}) },
         });
       else {
         await withHapticFeedback(async () => { if (!isPreview) await finish(alarm!); });
@@ -189,15 +224,16 @@ export function Ringing() {
         </View>
         <View style={{ width: "100%", gap: 16 }}>
         <AlarmSound alarm={alarm} preview={isPreview} playPreview ringing immediate={reminder === "1"} />
+          {routine.error && <><T style={{ color: c.peach }}>{routine.error}</T><Button title="Retry preparing routine" onPress={routine.retry} /></>}
           <Button
             title={
-              alarmMissions(alarm).length === 0 ? "Hello, new day" : "Wake up my mind"
+              routine.missions?.length === 0 ? "Hello, new day" : "Wake up my mind"
             }
             icon={
-              alarmMissions(alarm).length === 0 ? "sunny-outline" : "arrow-forward"
+              routine.missions?.length === 0 ? "sunny-outline" : "arrow-forward"
             }
-            loading={busy || working}
-            haptic={alarmMissions(alarm).length === 0 ? false : "light"}
+            loading={busy || working || !routine.missions}
+            haptic={routine.missions?.length === 0 ? false : "light"}
             onPress={() => void stop().catch(() => {})}
           />
         </View>
@@ -533,8 +569,19 @@ function ShakeGame({
   );
 }
 export function ChallengeScreen() {
+  const wake = useWakeAlarm();
+  const routine = useWakeRoutine(wake);
+  if (!wake.alarm) return <MissingAlarm />;
+  if (!routine.missions) return <Screen safeTop>
+    <AlarmSound alarm={wake.alarm} preview={wake.isPreview} ringing immediate />
+    <T>{routine.error ?? "Preparing your morning routine…"}</T>
+    {routine.error && <Button title="Retry preparing routine" onPress={routine.retry} />}
+  </Screen>;
+  return <ChallengeRun key={`${wake.alarm.id}:${wake.eventId ?? ""}:${wake.sessionId ?? ""}`} wake={wake} routine={routine.missions} previewSequence={routine.previewSequence} />;
+}
+function ChallengeRun({ wake, routine, previewSequence }: { wake: WakeAlarm; routine: Mission[]; previewSequence?: string }) {
   const { height } = useWindowDimensions();
-  const { alarm, isPreview, kind, difficulty, rounds, eventId, duaIds } = useWakeAlarm();
+  const { alarm, isPreview, kind, difficulty, rounds, eventId, duaIds, sessionId } = wake;
   const { finish, busy, data, setMissionSilenced } = useApp();
   const [fallback, setFallback] = useState(false),
     [completed, setCompleted] = useState(false);
@@ -542,9 +589,9 @@ export function ChallengeScreen() {
   const [roundIndex, setRoundIndex] = useState(0);
   const [duaIndex, setDuaIndex] = useState(0);
   const [fajrStart] = useState(() => fajrReminderIndex(data.fajrReminderIndex));
-  const readingFajr = (isPreview && kind ? kind : alarm && alarmMissions(alarm)[missionIndex]?.kind) === "fajr_reminder";
+  const readingFajr = (isPreview && kind ? kind : routine[missionIndex]?.kind) === "fajr_reminder";
   const step = `${missionIndex}:${roundIndex}:${duaIndex}`;
-  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds, duaIds }, readingFajr ? 300_000 : 60_000);
+  const { secondsLeft, isExpired, error: reminderError } = useMissionReminder(alarm, isPreview, eventId, step, completed, { kind, difficulty, rounds, duaIds, previewSequence }, readingFajr ? 300_000 : 60_000, sessionId);
   const silent = alarm?.silentMissions ?? data.silentMissions ?? true;
   const finishing = useRef(false);
   const [working, setWorking] = useState(false);
@@ -552,9 +599,9 @@ export function ChallengeScreen() {
   useEffect(() => { advancing.current = false; }, [missionIndex, roundIndex]);
   usePreventBack();
   if (!alarm) return <MissingAlarm />;
-  const missions: Mission[] = isPreview && kind && kind !== "none" && Object.hasOwn(challengeNames, kind) ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ kind, rounds: Number(rounds) }), ...(kind === "supplication" ? { duaIds: selectedSupplications(duaIds?.split(",")).map(d => d.id) } : {}) }] : alarmMissions(alarm);
+  const missions: Mission[] = isPreview && kind && kind !== "none" && Object.hasOwn(challengeNames, kind) ? [{ kind, difficulty: difficulty ?? alarm.difficulty, rounds: missionRounds({ kind, rounds: Number(rounds) }), ...(kind === "supplication" ? { duaIds: selectedSupplications(duaIds?.split(",")).map(d => d.id) } : {}) }] : routine;
   const mission = missions[missionIndex];
-  const duas = selectedSupplications(mission?.duaIds);
+  const duas = alarm.missionMode === "mystery" && !(isPreview && kind) ? orderedSupplications(mission?.duaIds) : selectedSupplications(mission?.duaIds);
   const totalRounds = missionRounds(mission);
   const challenge = fallback ? "math" : mission?.kind ?? "none";
   const level = mission?.difficulty ?? "gentle";

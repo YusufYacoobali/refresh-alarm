@@ -7,10 +7,10 @@ import { Alarm, Challenge } from "@/utils/alarms";
 import { MISSION_LIMIT_MS, missionSecondsLeft } from "@/utils/alarm-playback";
 
 export function useMissionReminder(alarm: Alarm | undefined, preview: boolean, eventId: string | undefined, missionStep: number | string, completed: boolean,
-  previewOptions?: { kind?: Challenge; difficulty?: Alarm["difficulty"]; rounds?: string; duaIds?: string }, requestedLimitMs = MISSION_LIMIT_MS) {
+  previewOptions?: { kind?: Challenge; difficulty?: Alarm["difficulty"]; rounds?: string; duaIds?: string; previewSequence?: string }, requestedLimitMs = MISSION_LIMIT_MS, sessionId?: string) {
   // Older installed Android binaries only support a one-minute native deadline.
   const limitMs = !preview && AndroidAlarm && !AndroidAlarm.missionActivityWithLimit ? MISSION_LIMIT_MS : requestedLimitMs;
-  const { kind, difficulty, rounds, duaIds } = previewOptions ?? {};
+  const { kind, difficulty, rounds, duaIds, previewSequence } = previewOptions ?? {};
   const latest = useRef(alarm); latest.current = alarm;
   const [error, setError] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
@@ -41,8 +41,8 @@ export function useMissionReminder(alarm: Alarm | undefined, preview: boolean, e
         expired.current = true;
         // Replacing the route discards every mission's progress.
         router.replace({ pathname: "/ringing", params: {
-          id: alarm!.id, preview: preview ? "1" : "0", reminder: "1", eventId,
-          ...(preview ? { kind, difficulty, rounds, duaIds } : {}),
+          id: alarm!.id, preview: preview ? "1" : "0", reminder: "1", eventId, sessionId,
+          ...(preview ? { kind, difficulty, rounds, duaIds, previewSequence } : {}),
         } });
       }
     };
@@ -54,7 +54,7 @@ export function useMissionReminder(alarm: Alarm | undefined, preview: boolean, e
       resume.remove();
       if (!preview) void cancelMissionTimeout(token).catch(() => {});
     };
-  }, [enabled, alarm?.id, preview, eventId, missionStep, kind, difficulty, rounds, duaIds, limitMs]));
+  }, [enabled, alarm?.id, preview, eventId, sessionId, missionStep, kind, difficulty, rounds, duaIds, previewSequence, limitMs]));
   const isExpired = useCallback(() => expired.current || (deadlineRef.current > 0 && Date.now() >= deadlineRef.current), []);
   return { secondsLeft, isExpired, error };
 }

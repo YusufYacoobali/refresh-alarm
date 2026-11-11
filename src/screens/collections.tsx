@@ -22,7 +22,8 @@ import {
   IconName,
 } from "@/components/ui";
 import { useApp } from "@/state/app-state";
-import { Mission, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
+import { AlarmSwitch } from "@/components/alarm-switch";
+import { Mission, MysterySettings, GameplayKind, GAMEPLAY_KINDS, defaultMysterySettings, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
 import { selectedSupplications, supplications } from "@/utils/supplications";
@@ -97,29 +98,65 @@ const challenges: { id: Mission["kind"]; name: string; subtitle: string }[] = [
 export function Challenges() {
   const { editing } = useLocalSearchParams<{ editing?: string }>();
   const { draft, updateDraft } = useApp();
-  const [selected, setSelected] = useState<Mission[]>(() => draft ? alarmMissions(draft) : [{ kind: "math", difficulty: "gentle" }]);
+  const [mode, setMode] = useState(draft?.missionMode ?? "manual");
+  const [manual, setManual] = useState<Mission[]>(() => draft ? alarmMissions(draft) : [{ kind: "math", difficulty: "gentle" }]);
+  const [mystery, setMystery] = useState<MysterySettings>(() => draft?.mystery ?? {
+    ...defaultMysterySettings(),
+    games: defaultMysterySettings().games.map(game => ({ ...game, ...alarmMissions(draft ?? { challenge: "none", difficulty: "gentle" }).find(m => m.kind === game.kind), kind: game.kind })),
+  });
+  const selected: Mission[] = mode === "manual" ? manual : [
+    ...mystery.games,
+    { kind: "supplication", difficulty: "gentle", duaIds: mystery.duaIds },
+    ...(mystery.fajr ? [{ kind: "fajr_reminder" as const, difficulty: "gentle" as const }] : []),
+  ];
+  function changeMode(next: "manual" | "mystery") {
+    setMode(next);
+    if (editing) updateDraft({ missionMode: next, mystery });
+  }
   function change(missions: Mission[]) {
-    setSelected(missions);
-    if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
+    if (mode === "mystery") {
+      const next: MysterySettings = {
+        games: missions.filter((m): m is Mission & { kind: GameplayKind } => GAMEPLAY_KINDS.includes(m.kind as GameplayKind)),
+        duaIds: missions.find(m => m.kind === "supplication")?.duaIds ?? mystery.duaIds,
+        fajr: missions.some(m => m.kind === "fajr_reminder"),
+      };
+      setMystery(next);
+      if (editing) updateDraft({ mystery: next });
+    } else {
+      setManual(missions);
+      if (editing) updateDraft({ missions, challenge: missions[0]?.kind ?? "none", difficulty: missions[0]?.difficulty ?? "gentle" });
+    }
   }
   // Expanding rows move offscreen siblings. Keep their Android native views
   // attached and their touch bounds in sync with the current Yoga layout.
   return <Screen style={{ gap: 22 }} removeClippedSubviews={false}>
     <Heading title="Get past snooze" subtitle="Choose what helps you start your morning." />
+    <View style={{ flexDirection: "row", gap: 10 }}>
+      <Chip title="Manual" active={mode === "manual"} onPress={() => changeMode("manual")} />
+      <Chip title="Mystery" active={mode === "mystery"} onPress={() => changeMode("mystery")} />
+    </View>
+    {mode === "mystery" && <View style={{ gap: 12 }}>
+      <T style={{ color: c.muted }}>Each wake-up chooses 2–{Math.min(4, mystery.games.length)} different games from your pool, then your shuffled morning duas. Choose at least two games and one dua. Difficulty and rounds stay as you set them.</T>
+      <Card animated={Platform.OS !== "android"}><View style={{ padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <T style={{ flex: 1 }}>Include Fajr reminder</T>
+        <AlarmSwitch testID="mystery-fajr" disabled={false} label="Include Fajr reminder" value={mystery.fajr} onValueChange={enabled => change(enabled ? [...selected, { kind: "fajr_reminder", difficulty: "gentle" }] : selected.filter(m => m.kind !== "fajr_reminder"))} />
+      </View></Card>
+      <T variant="small" style={{ color: c.muted }}>Fajr appears immediately before or after your duas. A timeout or snooze keeps the same routine.</T>
+    </View>}
     <Card animated={Platform.OS !== "android"} style={{ padding: 16, gap: 8 }}>
-      <T variant="eyebrow" style={{ color: c.peach }}>{selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
-      <T style={{ color: c.muted }}>{selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
+      <T variant="eyebrow" style={{ color: c.peach }}>{mode === "mystery" ? `${mystery.games.length} ELIGIBLE GAMES` : selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
+      <T style={{ color: c.muted }}>{mode === "mystery" ? mystery.games.map(missionLabel).join(" · ") : selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
     </Card>
-    {challenges.map(item => {
+    {challenges.filter(item => mode !== "mystery" || item.id !== "fajr_reminder" || mystery.fajr).map(item => {
       const index = selected.findIndex(m => m.kind === item.id);
       const mission = selected[index];
       return <Card key={item.id} animated={Platform.OS !== "android"} style={{ borderColor: mission ? c.lavender : c.line }}>
-        <Tap label={item.name} selected={!!mission} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
+        <Tap label={item.name} selected={!!mission} disabled={mode === "mystery" && (item.id === "supplication" || (!!mission && missionSupportsRounds(item.id) && mystery.games.length <= 2))} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}>
             <ClayMotion name={item.id} size={88} />
             <View style={{ flex: 1, gap: 4 }}><T variant="label">{item.name}</T><T variant="small" style={{ color: c.muted }}>{item.subtitle}</T></View>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: mission ? c.lavender : c.raised, alignItems: "center", justifyContent: "center" }}>
-              {mission ? <T variant="label" style={{ color: c.ink }}>{index + 1}</T> : <Icon name="add" size={18} />}
+              {mission ? mode === "mystery" ? <Icon name="checkmark" size={18} color={c.ink} /> : <T variant="label" style={{ color: c.ink }}>{index + 1}</T> : <Icon name="add" size={18} />}
             </View>
           </View>
         </Tap>
@@ -168,11 +205,11 @@ export function Challenges() {
         </View>}
       </Card>;
     })}
-    <Tap label="No missions" selected={!selected.length} onPress={() => change([])}>
+    {mode === "manual" && <Tap label="No missions" selected={!selected.length} onPress={() => change([])}>
       <Card animated={Platform.OS !== "android"} style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 12 }}><Icon name="sunny-outline" /><View style={{ flex: 1 }}><T variant="label">No missions</T><T variant="small" style={{ color: c.muted }}>Just tap to dismiss.</T></View>{!selected.length && <Icon name="checkmark-circle" />}</Card>
-    </Tap>
+    </Tap>}
     <T variant="small" style={{ color: c.faint }}>Missions run inside Refresh. Your device’s alarm controls remain available.</T>
-    {editing && <Button title={selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} onPress={() => router.back()} icon="checkmark" />}
+    {editing && <Button title={mode === "mystery" ? "Use Mystery Mode" : selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} onPress={() => router.back()} icon="checkmark" />}
   </Screen>;
 }
 export function Themes() {
