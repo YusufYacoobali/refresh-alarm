@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { AlarmCard } from "@/components/alarm-card";
 import { ReorderableAlarms } from "@/components/reorderable-alarms";
-import { colors as c, art } from "@/theme";
+import { colors as c, art, fonts } from "@/theme";
 import { useApp } from "@/state/app-state";
 import { nextOccurrence, nextAlarmAt, timeUntil, orderAlarms } from "@/utils/alarms";
 import { Float } from "@/components/motion";
@@ -57,7 +57,7 @@ export function Home() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <Icon name="sunny-outline" size={17} color={c.peach} />
+          <Icon name="moon-outline" size={17} color={c.peach} />
           <T variant="eyebrow" style={{ color: c.peach }}>
             REFRESH
           </T>
@@ -70,7 +70,7 @@ export function Home() {
         title={`${greeting},`}
         subtitle={
           now.getHours() < 18
-            ? "Make room for a fresh start."
+            ? "A fresh start. A little gratitude."
             : "Set tonight. Start fresh tomorrow."
         }
         right={
@@ -180,7 +180,7 @@ export function Home() {
           </View>
         </Tap>
       </View>
-      <Quote />
+      <Quote text="A new day. A fresh intention. Bismillah." />
       <Tap
         onPress={() =>
           router.push({
@@ -225,6 +225,7 @@ export function Alarms() {
       <Heading
         title="Your mornings"
         subtitle={next ? `Next alarm in ${timeUntil(next, now)}` : "No upcoming alarms"}
+        subtitleStyle={next ? { fontFamily: fonts.heavy, fontSize: 24, lineHeight: 32, color: c.peach } : undefined}
         right={
           <CircleButton
             icon="add"

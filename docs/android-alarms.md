@@ -42,3 +42,13 @@ Validation on 2026-09-16: Android release compilation, seven JVM timing/playback
 Final prompt: “Edit target: supplied valley.png, a portrait clay-style mountain landscape used as an alarm app background. Precise object removal: completely remove the large glowing sun disk above the central mountain valley. Fill its location seamlessly with the existing dusky purple/peach sky and distant mountain silhouettes; leave a subtle diffuse twilight horizon glow but NO sun, moon, orb, disk, or replacement celestial body. Preserve the original portrait composition, mountains, river, trees, stars, clay material, dark spacious upper sky, and all remaining details as closely as possible. No text or interface elements. This is a clean background asset for the project.”
 
 References: [Android alarms](https://developer.android.com/develop/background-work/services/alarms), [full-screen permission](https://developer.android.com/about/versions/14/behavior-changes-14#secure-fsi).
+
+## Reliability changes · 23 September 2026
+
+The reported 07:20 → 07:28 delay could not be reproduced on a physical phone here. Schedule calculation still targets the chosen local hour/minute, with seconds and milliseconds cleared, using `setAlarmClock` rather than an inexact timer.
+
+A real startup gap was fixed: AlarmManager releases its wake lock when the receiver returns, so the phone could sleep before the audio service acquired its own lock. `AlarmHandoff` now holds a bounded 30-second partial wake lock across that handoff and releases it once the service owns its playback lock. Startup failure and service destruction also release it. See [Android AlarmManager wake-lock guidance](https://developer.android.com/reference/android/app/AlarmManager).
+
+Failure to schedule the next repeating occurrence no longer prevents the current occurrence from ringing. A three-second preparation watchdog switches to the device alarm tone if the selected recording's decoder stalls. Logcat tag `RefreshAlarm` records scheduled, received, service-started and audio-started timestamps to distinguish OS delivery delays from startup/audio delays. No alarm label or audio contents are logged.
+
+Build the native app again; a JavaScript-only update cannot install these changes or the newly prepared audio resources. Repeat the locked-phone overnight test and collect `adb logcat -s RefreshAlarm` if it is late. The 19.40/8.88-second adhan lead-ins are separate defects and do not explain an eight-minute delay by themselves.

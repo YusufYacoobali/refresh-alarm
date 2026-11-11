@@ -71,8 +71,13 @@ object AlarmStore {
     val alarm = get(c, id) ?: return null
     if (alarm.optLong("scheduledAt") > System.currentTimeMillis() + 1500) return null
     val active = JSONObject(alarm.toString()).put("eventId", "$id:${alarm.optLong("scheduledAt")}")
+      .put("receivedAt", System.currentTimeMillis())
+    android.util.Log.i("RefreshAlarm", "scheduledAt=${alarm.optLong("scheduledAt")} receivedAt=${active.getLong("receivedAt")}")
     setActive(c, active)
-    if (alarm.optLong("timestamp", 0L) == 0L && alarm.getJSONArray("days").length() > 0) schedule(c, alarm)
+    // Failure to register tomorrow must never suppress today's wake-up.
+    if (alarm.optLong("timestamp", 0L) == 0L && alarm.getJSONArray("days").length() > 0) {
+      runCatching { schedule(c, alarm) }.onFailure { android.util.Log.e("RefreshAlarm", "Could not schedule next occurrence", it) }
+    }
     else prefs(c).edit().remove("alarm:$id").commit()
     return active
   }

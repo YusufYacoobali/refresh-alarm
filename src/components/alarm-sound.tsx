@@ -33,16 +33,20 @@ export function AlarmSound({ alarm, preview, playPreview = false, ringing = fals
     let starting = false;
     let transferred = false;
     const start = async () => {
-      if (cancelled || starting) return;
+      // AlarmKit must keep owning the audible lock-screen alarm until the app
+      // is active. JS/audio work can suspend during an inactive/background handoff.
+      const canTransfer = () => Platform.OS !== "ios" || AppState.currentState === "active";
+      if (cancelled || starting || !canTransfer()) return;
       starting = true;
       try {
         // Transfer the audible alarm to the foreground app, avoiding two players.
         if (!preview && !transferred) {
           if (ringing) await cancelMissionTimeout();
+          if (cancelled || !canTransfer()) return;
           await stopAlarm(latest.current);
           transferred = true;
         }
-        if (!cancelled && !silent) {
+        if (!cancelled && !silent && canTransfer()) {
           // The system tone has no foreground audio asset; use the bundled beep.
           const sound = resolveSoundId(latest.current.sound) === "system" ? "digital_beep" : latest.current.sound;
           await play(sound, true, { volume: latest.current.volume, rampSeconds: immediate ? 0 : latest.current.volumeRampSeconds });

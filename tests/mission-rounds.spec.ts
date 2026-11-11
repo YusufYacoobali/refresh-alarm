@@ -35,7 +35,7 @@ async function solveMath(page: Page) {
 test("rounds are independent, saved, and used by mission previews", async ({ page }) => {
   await seed(page);
   await page.goto("/alarms");
-  await page.getByRole("button", { name: /^Edit Round test/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByTestId("rounds-memory")).toHaveValue("3");
@@ -48,11 +48,54 @@ test("rounds are independent, saved, and used by mission previews", async ({ pag
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Round test/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByTestId("rounds-memory")).toHaveValue("4");
   await expect(page.getByTestId("rounds-math")).toHaveValue("2");
+});
+
+test("later mission cards expand and remain selectable in order after scrolling", async ({ page }) => {
+  await seed(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/alarms");
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
+  await page.getByRole("button", { name: "No missions", exact: true }).click();
+  const games = [
+    ["Number trail", "number_order", "2"],
+    ["Tile recall", "color_focus", "3"],
+    ["Pattern echo", "sequence", "4"],
+  ] as const;
+  for (const [name, kind, rounds] of games) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.getByRole("button", { name: `${name} Easy`, exact: true })).toBeVisible();
+    await page.getByTestId(`rounds-${kind}`).selectOption(rounds);
+    await page.getByRole("button", { name: `${name} Hard`, exact: true }).click();
+  }
+  for (const name of ["Islamic supplication", "Fajr reminder"]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.getByRole("button", { name: `Preview ${name}`, exact: true })).toBeVisible();
+  }
+  // Scroll back through expanded cards, collapse one, then reach the bottom again.
+  await page.getByRole("button", { name: "Tile recall", exact: true }).click();
+  await expect(page.getByTestId("rounds-color_focus")).toHaveCount(0);
+  await page.getByRole("button", { name: "Tile recall", exact: true }).click();
+  await page.getByTestId("rounds-color_focus").selectOption("3");
+  await page.getByRole("button", { name: "Use 5 missions", exact: true }).click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  await page.reload();
+  const missions = await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0].missions);
+  expect(missions).toEqual([
+    { kind: "number_order", difficulty: "bright", rounds: 2 },
+    { kind: "sequence", difficulty: "bright", rounds: 4 },
+    { kind: "supplication", difficulty: "gentle" },
+    { kind: "fajr_reminder", difficulty: "gentle" },
+    { kind: "color_focus", difficulty: "gentle", rounds: 3 },
+  ]);
 });
 
 test("three full memory rounds run before two math rounds and final dismissal", async ({ page }) => {
@@ -91,16 +134,14 @@ test("a new round resets the minute and timing out restarts from round one", asy
   await expect(page.getByTestId("mission-round")).toHaveText("Round 1 of 3");
 });
 
-test("each supplication round includes all three duas with fresh recitation counts", async ({ page }) => {
+test("legacy supplication rounds run the selected duas once before the next mission", async ({ page }) => {
   await seed(page, "supplication", 2);
   await page.goto("/challenge?id=rounds");
-  for (let round = 1; round <= 2; round++) {
-    await expect(page.getByTestId("mission-round")).toHaveText(`Round ${round} of 2`);
-    await expect(page.getByTestId("dua-title")).toHaveText("Upon waking");
-    for (const count of [1, 3, 3]) {
-      if (count === 3) await expect(page.getByTestId("dua-repetitions")).toHaveText("Recite 3 times · 0/3 completed");
-      for (let i = 0; i < count; i++) await page.getByRole("button", { name: "I’ve recited it", exact: true }).click();
-    }
+  await expect(page.getByTestId("mission-round")).toHaveCount(0);
+  await expect(page.getByTestId("dua-title")).toHaveText("Upon waking");
+  for (const count of [1, 3, 3]) {
+    if (count === 3) await expect(page.getByTestId("dua-repetitions")).toHaveText("Recite 3 times · 0/3 completed");
+    for (let i = 0; i < count; i++) await page.getByRole("button", { name: "I’ve recited it", exact: true }).click();
   }
   await expect(page.getByText("Mission 2 of 2", { exact: true })).toBeVisible();
   await expect(page.getByTestId("math-question")).toBeVisible();

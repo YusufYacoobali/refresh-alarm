@@ -1,0 +1,4 @@
+<resources>
+  <string name="refresh_app_block_label">Refresh app blocking</string>
+  <string name="refresh_app_block_description">With your permission, Refresh detects which app opens and covers apps you selected for your chosen duration when an enabled alarm rings. It does not read screen content or send app activity off your phone. You can turn this access off here at any time.</string>
+</resources>

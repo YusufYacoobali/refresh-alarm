@@ -13,6 +13,28 @@ xcrun swift --version
 
 ## Fixes in this checkout
 
+### App Review 2.5.4: background audio
+
+`app.json` explicitly clears `UIBackgroundModes` and disables background playback
+and recording in the `expo-audio` plugin. In-app audio stops when the app becomes
+inactive; the alarm screen resumes it when the app becomes active again. Scheduled
+iOS alarms and mission timeout alarms still use AlarmKit. Android alarms use the
+separate native `AlarmRingService`.
+
+This requires a new iOS binary. EAS production builds generate the native project
+from this config and increment the build number automatically. For an existing
+Mac/Xcode project, run `npx expo prebuild --platform ios --no-install` to apply the
+config before archiving. Verify the app target's Info.plist has no `audio` entry in
+`UIBackgroundModes`, and that Audio, AirPlay, and Picture in Picture is unchecked
+under Background Modes. Check the archived app's Info.plist too.
+
+On a physical device, verify a scheduled alarm while locked, opening the ringing
+screen, leaving and reopening that screen, and a mission timeout while backgrounded.
+After opening the alarm in-app, its foreground sound no longer continues on the
+Home Screen; an already scheduled mission timeout remains a system alarm.
+
+### Expo JSI compatibility
+
 `patches/expo-modules-jsi+57.1.0.patch` addresses both failures in Expo's JSI
 bridge, and `npm ci` / `npm install` apply it through `postinstall`:
 
@@ -34,6 +56,31 @@ whether upstream has fixed these issues; regenerate or remove the patch as
 appropriate. Never ignore a patch failure or use `--ignore-scripts` for a build.
 
 ## Recover an existing Mac checkout
+
+### `Cannot find 'DaybreakAlarmSound' in scope`
+
+The volume helper is defined in
+`modules/daybreak-alarm-kit/ios/DaybreakAlarmSound.swift`. It must be present in
+the Mac checkout alongside `DaybreakAlarmKitModule.swift`. The podspec already
+includes all Swift files in that directory, but a previously generated Pods
+project may still have the source list from before this file was added.
+
+After bringing the Mac checkout up to date, close Xcode and run from the repo root:
+
+```sh
+cd ios
+pod install
+open Refresh.xcworkspace
+```
+
+If the project uses Bundler for CocoaPods, use `bundle exec pod install` instead.
+In Xcode, choose **Product > Clean Build Folder**, then build again. Confirm
+`DaybreakAlarmSound.swift` appears in the **DaybreakAlarmKit** pod target's
+**Build Phases > Compile Sources**. Do not add it to the app target; it must
+compile in the same module as `DaybreakAlarmKitModule.swift`. This refresh does
+not require deleting `ios/` or changing the sound implementation.
+
+### Full native regeneration
 
 Commit or back up any manual edits to the generated `ios/` directory first.
 This repository ignores that directory; `--clean` regenerates it and removes
@@ -73,6 +120,17 @@ TypeScript checks, Expo diagnostics, successful patch application, and an iOS
 JavaScript export do not prove Swift compilation or system alarm delivery.
 The repair was prepared on Windows; Xcode builds and physical-device checks
 remain required on a Mac/iPhone.
+
+## Late iPhone alarm investigation — 23 September 2026
+
+The reported 07:20 alarm first sounding at 07:28 was on **iOS**, not Android. Its exact cause is not reproduced or confirmed fixed. The JS scheduler passes the selected hour/minute directly to AlarmKit; a mocked-native regression now checks 07:20 explicitly.
+
+- Defer the foreground audio handoff while iOS is inactive/backgrounded, including rechecking after asynchronous reminder cleanup. The system alarm must not be stopped merely because its state event reached JS behind the lock screen.
+- On iOS 26+, refuse to enable a new alarm if the AlarmKit bridge is unavailable instead of silently registering an ordinary notification. Earlier iOS versions retain the notification fallback, now marked `timeSensitive` with its entitlement. Notification settings can still override time-sensitive delivery; see [Apple's delivery documentation](https://developer.apple.com/documentation/usernotifications/unnotificationinterruptionlevel/timesensitive) and [Expo SDK 57 notifications](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/).
+- Native Console category `AlarmTiming` records accepted schedules (hour, minute, timezone and fixed timestamp), observed alert-state updates, and app-requested stops. These are observation timestamps, not proof of the exact moment audio became audible; observation may resume late if the app was suspended.
+- Rebuild iOS to include the timing logs, time-sensitive entitlement and trimmed bundled adhan excerpts. On the affected iPhone, save an alarm a few minutes ahead and verify locked, Silent/Focus, foreground, and cold-launch cases against a second clock. Record iOS version, whether the system alert appeared on time, and whether the app was opened at 07:28. No artificial eight-minute offset has been introduced or removed.
+
+The five new mocked-native tests cover scheduling, bridge availability, fallback priority and inactive/background handoff ordering. They do not replace an Xcode build or physical-device delivery test.
 
 Validation on September 17, 2026: TypeScript passed; all 16 existing unit tests
 passed; Expo Doctor passed 21/21 checks; SDK dependencies were aligned; Apple

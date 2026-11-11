@@ -23,19 +23,38 @@ async function seed(page: Page, enabled = true) {
   }, enabled);
 }
 
-async function chooseAction(page: Page, action: "Duplicate" | "Delete", label = "Morning") {
-  await page.getByRole("button", { name: `More options for ${label}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: `${action} ${label}`, exact: true }).click();
+async function chooseAction(page: Page, action: "Duplicate" | "Delete", index = 0) {
+  await page.getByRole("button", { name: "More options for alarm at 7:15 AM", exact: true }).nth(index).click();
+  await page.getByRole("menuitem", { name: `${action} alarm at 7:15 AM`, exact: true }).click();
 }
 
+const records = (page: Page) => page.locator('[data-testid^="alarm-record-"]');
+
 const readAlarms = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms);
+
+test("saved names stay hidden in cards, editor, accessibility labels and ringing", async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  await expect(page.getByRole("button", { name: "Edit alarm at 7:15 AM", exact: true })).toBeVisible();
+  await expect(page.getByText("Morning", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[aria-label*="Morning"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit alarm at 7:15 AM", exact: true }).click();
+  await expect(page.getByLabel("Alarm label", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  expect((await readAlarms(page))[0].label).toBe("Morning");
+  await page.goto("/ringing?id=original");
+  await expect(page.getByTestId("alarm-wallpaper-screen")).toBeVisible();
+  await expect(page.getByText("Morning", { exact: true })).toHaveCount(0);
+});
 
 for (const enabled of [true, false]) test(`duplicate preserves an ${enabled ? "enabled" : "disabled"} alarm and all its settings`, async ({ page }) => {
   await seed(page, enabled);
   await page.goto("/alarms");
   const before = (await readAlarms(page))[0];
   await chooseAction(page, "Duplicate");
-  await expect(page.getByText("Morning (copy)", { exact: true })).toBeVisible();
+  await expect(records(page)).toHaveCount(2);
+  await expect(page.getByText(/Morning/)).toHaveCount(0);
   await page.reload();
   const alarms = await readAlarms(page);
   expect(alarms).toHaveLength(2);
@@ -46,33 +65,35 @@ for (const enabled of [true, false]) test(`duplicate preserves an ${enabled ? "e
   expect(copySettings).toEqual(originalSettings);
   if (enabled) expect(registration.ids).not.toContain("source-registration");
   await chooseAction(page, "Duplicate");
-  await expect(page.getByText("Morning (copy 2)", { exact: true })).toBeVisible();
+  await expect(records(page)).toHaveCount(3);
+  await expect(page.getByText(/Morning/)).toHaveCount(0);
 });
 
 test("delete can be cancelled, removes only the chosen record, and is available on Home", async ({ page }) => {
   await seed(page);
   await page.goto("/alarms");
   await chooseAction(page, "Duplicate");
-  await expect(page.getByText("Morning (copy)", { exact: true })).toBeVisible();
+  await expect(records(page)).toHaveCount(2);
   await chooseAction(page, "Delete");
-  await expect(page.getByRole("button", { name: "Confirm delete Morning", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Keep Morning", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Confirm delete alarm at 7:15 AM", exact: true })).toBeVisible();
+  await expect(page.getByText(/Delete alarm at 7:15 AM/)).toBeVisible();
+  await page.getByRole("button", { name: "Keep alarm at 7:15 AM", exact: true }).click();
   expect(await readAlarms(page)).toHaveLength(2);
   await expect(page.getByRole("menuitem")).toHaveCount(0);
   await page.screenshot({ path: "artifacts/alarm-record-actions.png" });
-  await page.getByRole("button", { name: "More options for Morning", exact: true }).click();
+  await page.getByRole("button", { name: "More options for alarm at 7:15 AM", exact: true }).first().click();
   await page.screenshot({ path: "artifacts/alarm-record-menu.png" });
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menuitem")).toHaveCount(0);
-  await chooseAction(page, "Delete", "Morning (copy)");
-  await page.getByRole("button", { name: "Confirm delete Morning (copy)", exact: true }).click();
-  await expect(page.getByText("Morning (copy)", { exact: true })).toHaveCount(0);
+  await chooseAction(page, "Delete", 1);
+  await page.getByRole("button", { name: "Confirm delete alarm at 7:15 AM", exact: true }).click();
+  await expect(records(page)).toHaveCount(1);
   await page.reload();
   expect((await readAlarms(page)).map((a: { id: string }) => a.id)).toEqual(["original"]);
   await page.getByRole("tab", { name: "Home", exact: true }).click();
-  await expect(page.getByRole("button", { name: "More options for Morning", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "More options for alarm at 7:15 AM", exact: true })).toBeVisible();
   await chooseAction(page, "Delete");
-  await page.getByRole("button", { name: "Confirm delete Morning", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm delete alarm at 7:15 AM", exact: true }).click();
   await expect(page.getByRole("button", { name: "Set your first alarm", exact: true })).toBeVisible();
   expect(await readAlarms(page)).toHaveLength(0);
 });
@@ -81,7 +102,7 @@ for (const action of ["Duplicate", "Delete"]) test(`a failed ${action.toLowerCas
   await seed(page);
   await page.goto("/alarms");
   await page.evaluate(() => { (window as any).failAlarmAction = true; });
-  const button = action === "Duplicate" ? "Duplicate Morning" : "Confirm delete Morning";
+  const button = action === "Duplicate" ? "Duplicate alarm at 7:15 AM" : "Confirm delete alarm at 7:15 AM";
   if (action === "Delete") await chooseAction(page, "Delete");
   if (action === "Duplicate") await chooseAction(page, "Duplicate");
   else await page.getByRole("button", { name: button, exact: true }).click();

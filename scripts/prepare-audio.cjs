@@ -1,5 +1,5 @@
-// Decode the supplied files locally and create notification-compatible PCM WAVs.
-// Original files stay untouched. Edge supplies the decoder; no remote service.
+// Decode locally with Edge; originals stay untouched. Prepared full adhans and
+// notification excerpts share an onset, so no playback path repeats the silence.
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('@playwright/test');
@@ -7,51 +7,71 @@ const root = path.resolve(__dirname, '..');
 const catalog = require('../assets/audio/catalog.json');
 (async () => {
   fs.mkdirSync(path.join(root, 'assets/audio/alarms'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'src/data'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'assets/audio/prepared'), { recursive: true });
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   const page = await browser.newPage();
   const entries = [];
   try {
     for (const entry of catalog) {
       const base64 = fs.readFileSync(path.join(root, 'assets/audio', entry.file)).toString('base64');
-      const result = await page.evaluate(async encoded => {
-        const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
-        const decoder = new OfflineAudioContext(1, 1, 22050);
-        const decoded = await decoder.decodeAudioData(bytes.buffer);
-        const frames = Math.min(decoded.length, Math.floor(29 * decoded.sampleRate));
-        const context = new OfflineAudioContext(1, Math.ceil(frames / decoded.sampleRate * 22050), 22050);
+      const result = await page.evaluate(async ({ encoded, fullPlayback }) => {
+        const rate = 22050;
+        const decoder = new OfflineAudioContext(1, 1, rate);
+        const decoded = await decoder.decodeAudioData(Uint8Array.from(atob(encoded), c => c.charCodeAt(0)).buffer);
+        const context = new OfflineAudioContext(1, decoded.length, rate);
         const source = context.createBufferSource(); source.buffer = decoded; source.connect(context.destination); source.start();
         const rendered = await context.startRendering();
         const samples = rendered.getChannelData(0);
-        const buffer = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buffer);
-        const text = (at, s) => [...s].forEach((c, i) => view.setUint8(at+i, c.charCodeAt(0)));
-        text(0,'RIFF'); view.setUint32(4,buffer.byteLength-8,true); text(8,'WAVE'); text(12,'fmt ');
-        view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
-        view.setUint32(24,22050,true); view.setUint32(28,44100,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
-        text(36,'data'); view.setUint32(40,samples.length*2,true);
-        let peak = 0;
-        for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
-        const gain = peak > .95 ? .95 / peak : 1;
-        for (let i=0;i<samples.length;i++) {
-          const fade = Math.min(1, i/220, (samples.length-1-i)/440);
-          view.setInt16(44+i*2, Math.round(Math.max(-1,Math.min(1,samples[i]*gain*fade))*32767), true);
+        let start = 0;
+        if (fullPlayback) {
+          // Sustained energy above -50 dBFS, with 80 ms pre-roll to preserve the
+          // first consonant. Only trim the opening; never cut pauses in recitation.
+          const window = Math.floor(rate * .02);
+          let consecutive = 0;
+          for (let i = 0; i < Math.min(samples.length, rate * 45); i += window) {
+            let power = 0;
+            for (let j = i; j < Math.min(i + window, samples.length); j++) power += samples[j] ** 2;
+            consecutive = Math.sqrt(power / window) > .0031623 ? consecutive + 1 : 0;
+            if (consecutive === 3) { start = Math.max(0, i - 2 * window - Math.floor(rate * .08)); break; }
+          }
         }
-        let binary=''; const output=new Uint8Array(buffer);
-        for(let i=0;i<output.length;i+=8192) binary+=String.fromCharCode(...output.subarray(i,i+8192));
-        return { audio:btoa(binary), duration:samples.length/22050, originalDuration:decoded.duration, peak };
-      }, base64);
-      if (!result.peak) throw new Error(`Silent file: ${entry.file}`);
+        function wav(end) {
+          const length = end - start;
+          const buffer = new ArrayBuffer(44 + length * 2), view = new DataView(buffer);
+          const text = (at, s) => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+          text(0, 'RIFF'); view.setUint32(4, buffer.byteLength - 8, true); text(8, 'WAVE'); text(12, 'fmt ');
+          view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+          view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+          text(36, 'data'); view.setUint32(40, length * 2, true);
+          let peak = 0;
+          for (let i = start; i < end; i++) peak = Math.max(peak, Math.abs(samples[i]));
+          if (!peak) throw new Error('Silent recording');
+          const gain = peak > .95 ? .95 / peak : 1;
+          for (let i = 0; i < length; i++) {
+            const fade = Math.min(1, i / 110, (length - 1 - i) / 440);
+            view.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, samples[start + i] * gain * fade)) * 32767), true);
+          }
+          let binary = ''; const output = new Uint8Array(buffer);
+          for (let i = 0; i < output.length; i += 8192) binary += String.fromCharCode(...output.subarray(i, i + 8192));
+          return btoa(binary);
+        }
+        return { audio: wav(Math.min(samples.length, start + rate * 29)), full: fullPlayback ? wav(samples.length) : null,
+          trimmedStartSeconds: start / rate, originalDuration: decoded.duration,
+          duration: (samples.length - start) / rate, nativeDuration: Math.min(29, (samples.length - start) / rate) };
+      }, { encoded: base64, fullPlayback: !!entry.fullPlayback });
       const nativeFile = `daybreak_${entry.id}.wav`;
-      fs.writeFileSync(path.join(root,'assets/audio/alarms',nativeFile),Buffer.from(result.audio,'base64'));
-      entries.push({ ...entry, nativeFile, duration: Math.round((entry.fullPlayback ? result.originalDuration : result.duration)*10)/10, nativeDuration: Math.round(result.duration*10)/10, originalDuration: result.originalDuration });
-      console.log(`${entry.name}: ${result.originalDuration.toFixed(1)}s → ${result.duration.toFixed(1)}s`);
+      fs.writeFileSync(path.join(root, 'assets/audio/alarms', nativeFile), Buffer.from(result.audio, 'base64'));
+      const playbackFile = entry.fullPlayback ? `prepared/refresh_full_${entry.id}.wav` : `alarms/${nativeFile}`;
+      if (result.full) fs.writeFileSync(path.join(root, 'assets/audio', playbackFile), Buffer.from(result.full, 'base64'));
+      entries.push({ ...entry, nativeFile, playbackFile, duration: Math.round((entry.fullPlayback ? result.duration : result.nativeDuration) * 10) / 10,
+        nativeDuration: result.nativeDuration, originalDuration: result.originalDuration, trimmedStartSeconds: result.trimmedStartSeconds });
+      console.log(`${entry.name}: removed ${result.trimmedStartSeconds.toFixed(2)}s; ${result.duration.toFixed(1)}s remaining`);
     }
   } finally { await browser.close(); }
-  fs.writeFileSync(path.join(root,'src/data/sound-catalog.ts'), '// Generated by scripts/prepare-audio.cjs.\nexport const soundCatalog = '+JSON.stringify(entries,null,2)+' as const;\n');
-  fs.writeFileSync(path.join(root,'src/data/audio-sources.ts'), '// Generated by scripts/prepare-audio.cjs.\nexport const audioSources = {\n'+entries.map(e=>`  ${e.id}: require(${JSON.stringify(`../../assets/audio/${e.fullPlayback ? e.file : `alarms/${e.nativeFile}`}`)}),`).join('\n')+'\n};\n');
+  fs.writeFileSync(path.join(root, 'src/data/sound-catalog.ts'), '// Generated by scripts/prepare-audio.cjs.\nexport const soundCatalog = ' + JSON.stringify(entries, null, 2) + ' as const;\n');
+  fs.writeFileSync(path.join(root, 'src/data/audio-sources.ts'), '// Generated by scripts/prepare-audio.cjs.\nexport const audioSources = {\n' + entries.map(e => `  ${e.id}: require(${JSON.stringify(`../../assets/audio/${e.playbackFile}`)}),`).join('\n') + '\n};\n');
   const configPath = path.join(root, 'app.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  const notifications = config.expo.plugins.find(p => Array.isArray(p) && p[0] === 'expo-notifications');
-  notifications[1].sounds = entries.map(e => `./assets/audio/alarms/${e.nativeFile}`);
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2)+'\n');
-})().catch(e=>{console.error(e);process.exit(1)});
+  config.expo.plugins.find(p => Array.isArray(p) && p[0] === 'expo-notifications')[1].sounds = entries.map(e => `./assets/audio/alarms/${e.nativeFile}`);
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+})().catch(e => { console.error(e); process.exit(1); });

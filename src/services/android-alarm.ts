@@ -2,6 +2,10 @@ import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
 
 type AndroidAlarmBridge = {
+  appBlockVersion?(): number;
+  appBlockStatus?(): { authorized: boolean; activeUntil: number };
+  requestAppBlockAccess?(): Promise<void>;
+  blockableApps?(): Promise<{ id: string; name: string; suggested: boolean }[]>;
   permissions(): { exact: boolean; fullScreen: boolean; notifications: boolean; channel: boolean };
   openSettings(kind: "exact" | "fullScreen" | "channel"): Promise<void>;
   schedule(json: string): Promise<void>;
@@ -10,5 +14,6 @@ type AndroidAlarmBridge = {
   stop(alarmId: string): Promise<void>;
   setMissionSilenced(eventId: string, silent: boolean): Promise<void>;
   missionActivity(eventId: string): Promise<void>;
+  missionActivityWithLimit?(eventId: string, limitMs: number): Promise<void>;
 };
 export default Platform.OS === "android" ? requireOptionalNativeModule<AndroidAlarmBridge>("RefreshAlarm") : null;

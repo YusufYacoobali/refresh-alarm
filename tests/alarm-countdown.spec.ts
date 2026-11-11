@@ -19,8 +19,8 @@ test("Alarms counts down to the next enabled alarm and updates when switched off
   await page.clock.fastForward(60_000);
   await expect(page.getByText("Next alarm in 59m", { exact: true })).toBeVisible();
   await page.screenshot({ path: "artifacts/alarms-compact.png" });
-  await page.getByRole("switch", { name: "Enable Early morning" }).click();
+  await page.getByRole("switch", { name: "Enable alarm at 7:00 AM" }).click();
   await expect(page.getByText("Next alarm in 1h 59m", { exact: true })).toBeVisible();
-  await page.getByRole("switch", { name: "Enable Later morning" }).click();
+  await page.getByRole("switch", { name: "Enable alarm at 8:00 AM" }).click();
   await expect(page.getByText("No upcoming alarms", { exact: true })).toBeVisible();
 });

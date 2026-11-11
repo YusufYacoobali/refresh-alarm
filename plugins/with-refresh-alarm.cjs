@@ -39,7 +39,11 @@ module.exports = function withRefreshAlarm(config) {
     fs.mkdirSync(output, { recursive: true });
     const catalog = JSON.parse(fs.readFileSync(path.join(root, 'assets/audio/catalog.json'), 'utf8'));
     for (const sound of catalog.filter(sound => sound.fullPlayback)) {
-      fs.copyFileSync(path.join(root, 'assets/audio', sound.file), path.join(output, `refresh_full_${sound.id}.mp3`));
+      const name = `refresh_full_${sound.id}`;
+      // The old MP3 and new WAV must not produce duplicate Android resource IDs.
+      const legacy = path.join(output, `${name}.mp3`);
+      if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
+      fs.copyFileSync(path.join(root, 'assets/audio/prepared', `${name}.wav`), path.join(output, `${name}.wav`));
     }
     return config;
   }]);

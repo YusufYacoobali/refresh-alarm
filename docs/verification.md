@@ -46,3 +46,39 @@ Verified in the Windows workspace on 2026-09-15, after upgrading to Expo SDK 57.
 Not verified here: Xcode/Swift compilation, native signing, actual AlarmKit delivery, lock-screen App Intent behavior, physical accelerometer detection, haptic strength and timing, Android lock-screen/service delivery on hardware, VoiceOver, and release-device frame rate. These need the physical-device checks in `device-verification.md` and `android-alarms.md`. No Android device was connected for these changes. The browser shake control is explicitly a preview.
 
 The generated native iOS and Android projects are not committed; use Expo prebuild when creating a development build. No app-store deployment or EAS build has been submitted.
+
+## 23 September 2026 refresh
+
+- TypeScript checking and Expo SDK 57 web export pass.
+- 41 unit/config/audio tests pass, including validation of new missions and selected duas and onset checks for both full adhans and their iOS excerpts.
+- 19 browser checks pass across audio, time editing, all new missions, selected-dua persistence/preview, existing supplications and mission rounds. This includes incorrect answers, completion, narrow phone layout, round resets and timeout behaviour.
+- Android `:refresh-alarm:testDebugUnitTest` compiles the changed Kotlin module and passes its JVM tests.
+- Physical phone delivery, Doze, OEM battery restrictions and iOS system playback still require a new native build on-device. The specific eight-minute delay is not confirmed as reproduced or eliminated.
+
+## Full-screen games and Fajr reminders — 23 September 2026
+
+- Shape match replaces the word/ink game while preserving stored mission IDs. Number trail, Shape match and Pattern echo fill the available screen; all pads fit at 320 × 640 and 390 × 844.
+- 16 targeted browser tests pass across visual games, Fajr reminders, selected duas and mission rounds. Coverage includes wrong answers, automatic light sequences and replay, completion, all five full readings, persisted rotation, previews that do not consume reminders, and the five-minute reading timeout.
+- TypeScript and web export pass. Android `:refresh-alarm:testDebugUnitTest` compiles the new reading-limit bridge and passes native deadline tests. A rebuilt Android app is required for the longer reading limit; older binaries keep their one-minute native limit.
+- Reviewed screenshots in `artifacts/islamic-refresh/shapes.png`, `pattern.png`, and `fajr.png`. Physical-device gameplay and delivery still require testing on a phone.
+
+## iOS timing follow-up
+
+- User confirmed the eight-minute late alarm occurred on iOS. Android hardening is separate from that report.
+- Five mocked-native iOS regression tests pass: exact 07:20 scheduling, rejecting missing AlarmKit on iOS 26+, time-sensitive older-iOS fallback, and preserving the system alarm while inactive or backgrounded during handoff setup.
+- Added native `AlarmTiming` logs for scheduling, observed alert changes and stops. The original eight-minute delay has not been reproduced. Swift compilation and locked-iPhone delivery remain unverified on this Windows machine.
+- All 47 local unit/config/audio/iOS-boundary tests pass. TypeScript and both iOS and web JavaScript exports pass; exporting JavaScript does not validate Swift compilation.
+- Final exported-browser regression: 17 additional checks pass across alarm routing, audio playback, sound preferences, time-wheel editing and completion/retry. Together with the 16 mission/reading checks, 33 browser checks pass for this update. The preview server was restarted after the interrupted turn before this final run.
+
+## Tile recall refinement — 23 September 2026
+
+- Replaced Shape match with three simultaneously highlighted, blank tiles, shown for two seconds. Recall accepts any order; a wrong tile resets progress and replays the same locations. Easy uses 3×4 and Hard uses 4×4. Existing saved mission IDs and round settings remain compatible.
+- TypeScript and web export pass. All five focus-mission browser tests pass, including exact two-second visibility, input locking during preview, unordered answers, duplicate prevention, mistake recovery, multiple rounds, and full-screen phone layouts.
+- Visually reviewed both difficulty levels at 320 × 640: `artifacts/islamic-refresh/tile-recall-gentle.png` and `tile-recall-bright.png`.
+
+- Difficulty increased: Easy is now 4×4 with three targets; Hard is 6×6 with eight. Both retain two seconds of preview. TypeScript and web export pass. The four other focus-mission checks pass, and the updated recall regression passes after fixing highlight borders to maintain equal tile widths. All hard-mode tiles stay at least 44 × 44 on a 320 × 640 viewport; unordered recall, mistake reset and both rounds pass for both difficulties.
+
+## New mission icons — 23 September 2026
+
+- Added dedicated faceless clay Lottie icons for Number Trail, Tile Recall, Pattern Echo, Duas and Fajr Reminder; all mission collection cards now use the shared animated artwork component.
+- TypeScript and web export pass. Browser verification confirms all five SVGs render in the exported app, animate normally, and stop for reduced motion, with no page errors. Reviewed `artifacts/islamic-refresh/mission-icons.png` and `mission-icons-in-app.png` for composition and small-size legibility.

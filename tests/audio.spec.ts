@@ -43,7 +43,7 @@ test("Islamic section saves adhan selections and reopens on the selected section
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms[0].sound)).toBe("adhan_alafasy_fajr");
   await page.reload();
-  await page.getByRole("button", { name: /^Edit Rise & shine at/ }).click();
+  await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Sound & volume/ }).click();
   await page.getByRole("button", { name: /Choose sound/ }).click();
   await expect(page.getByRole("button", { name: "Islamic", exact: true })).toHaveAttribute("aria-pressed", "true");

@@ -4,6 +4,7 @@ import { View, TextInput, Linking, Platform, useWindowDimensions } from "react-n
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
 import { AlarmSwitch } from "@/components/alarm-switch";
+import { AppBlockSettings } from "@/components/app-block-settings";
 import { Host, Slider } from "@expo/ui";
 import { Image } from "expo-image";
 import { pickWallpaper } from "@/services/wallpaper";
@@ -20,12 +21,15 @@ import {
   missionSummary,
   timeUntil,
   nextOccurrence,
+  displayTime,
+  ALARM_NAMING_ENABLED,
 } from "@/utils/alarms";
 
 function TimeDial({ hour, minute, onChange }: { hour: number; minute: number; onChange(h: number, m: number): void }) {
   const { reduced } = useMotion();
   const { width } = useWindowDimensions();
-  const size = Math.min(264, width - 48), center = size / 2, radius = center - 23;
+  // Leave clearance around the full wheel rectangle, including its faded corners.
+  const size = Math.min(312, width - 32), center = size / 2, radius = center - 23;
   return <View testID="time-dial" style={{ width: size, height: size, alignSelf: "center", alignItems: "center", justifyContent: "center" }}>
     <View pointerEvents="none" style={{ position: "absolute", width: size - 28, height: size - 28, borderRadius: center - 14, borderWidth: 17, borderColor: "#26263F", boxShadow: "inset 3px 3px 9px #8E81BC55, 0 0 30px #BDB0F510" }} />
     {Array.from({ length: 30 }, (_, i) => {
@@ -100,13 +104,14 @@ export function AlarmEditor() {
           onChange={(hour, minute) => updateDraft({ hour, minute })}
         />
         <T variant="small" style={{ color: c.muted, textAlign: "center" }}>
-          {timeUntil(nextOccurrence(draft))} from now
+          {displayTime(draft)} {draft.hour < 12 ? "AM" : "PM"} · {timeUntil(nextOccurrence(draft))} from now
         </T>
       </View>
       <Card>
         <Row
           icon="repeat-outline"
           title="Repeat"
+          last={!ALARM_NAMING_ENABLED && !repeatOpen}
           value={
             draft.days.length === 5 &&
             [1, 2, 3, 4, 5].every((d) => draft.days.includes(d))
@@ -178,7 +183,7 @@ export function AlarmEditor() {
             </View>
           </Animated.View>
         )}
-        <Row icon="pricetag-outline" title="Label">
+        {ALARM_NAMING_ENABLED && <Row icon="pricetag-outline" title="Label">
           <TextInput
             accessibilityLabel="Alarm label"
             value={draft.label}
@@ -194,7 +199,7 @@ export function AlarmEditor() {
               minHeight: 34,
             }}
           />
-        </Row>
+        </Row>}
       </Card>
       <Card>
         <Row
@@ -256,6 +261,7 @@ export function AlarmEditor() {
         </View>
         </>}
       </Card>
+      <AppBlockSettings alarm={draft} onChange={updateDraft} />
       <View
         style={{
           flexDirection: "row",
@@ -266,7 +272,11 @@ export function AlarmEditor() {
       >
         <Icon name="information-circle-outline" size={16} color={c.faint} />
         <T variant="small" style={{ color: c.faint, flex: 1 }}>
-          {draft.sound === "system" ? "Uses your device’s default alarm sound." : `${soundName(draft.sound)} plays when this alarm rings.`}
+          {draft.sound === "system"
+            ? Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && (draft.volume ?? 1) < 1
+              ? "Uses Digital Beep to apply your chosen volume on the iPhone alarm screen."
+              : "Uses your device’s default alarm sound."
+            : `${soundName(draft.sound)} plays when this alarm rings.`}
         </T>
       </View>
     </Screen>

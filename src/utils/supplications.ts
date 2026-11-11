@@ -1,6 +1,7 @@
 /** Arabic wording and counts checked against Hisn al-Muslim, in the requested order. */
 export const supplications = [
   {
+    id: "waking",
     title: "Upon waking",
     arabic: "الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ",
     transliteration: "Alhamdulillahil-ladhi ahyana ba‘da ma amatana wa ilayhin-nushur.",
@@ -11,6 +12,7 @@ export const supplications = [
     source: "https://sunnah.com/hisn:1",
   },
   {
+    id: "contentment",
     title: "Contentment in faith",
     arabic: "رَضِيتُ بِاللَّهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا",
     transliteration: "Raditu billahi Rabban, wa bil-Islami dinan, wa bi-Muhammadin ﷺ nabiyyan.",
@@ -21,6 +23,7 @@ export const supplications = [
     source: "https://sunnah.com/hisn:87",
   },
   {
+    id: "protection",
     title: "Seeking protection",
     arabic: "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ",
     transliteration: "Bismillahil-ladhi la yadurru ma‘a ismihi shay’un fil-ardi wa la fis-sama’i wa Huwas-Sami‘ul-‘Alim.",
@@ -33,3 +36,9 @@ export const supplications = [
 ] as const;
 
 export type Supplication = (typeof supplications)[number];
+export type SupplicationId = Supplication["id"];
+/** Unconfigured legacy missions retain all three duas in their original order. */
+export function selectedSupplications(ids?: readonly string[]) {
+  const selected = supplications.filter(dua => ids?.includes(dua.id));
+  return selected.length ? selected : [...supplications];
+}

@@ -15,6 +15,12 @@ class RefreshAlarmModule : Module() {
   private val context: Context get() = requireNotNull(appContext.reactContext)
   override fun definition() = ModuleDefinition {
     Name("RefreshAlarm")
+    Function("appBlockVersion") { 2 }
+    Function("appBlockStatus") { mapOf("authorized" to AppBlockStore.authorized(context), "activeUntil" to AppBlockStore.until(context)) }
+    AsyncFunction("blockableApps") { AppBlockStore.apps(context) }
+    AsyncFunction("requestAppBlockAccess") {
+      context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
     Function("permissions") {
       AlarmRingService.ensureChannel(context)
       val manager = context.getSystemService(NotificationManager::class.java)
@@ -32,7 +38,15 @@ class RefreshAlarmModule : Module() {
         else Intent(action, Uri.parse("package:${context.packageName}"))
       context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
-    AsyncFunction("schedule") { json: String -> AlarmStore.schedule(context, JSONObject(json)) }
+    AsyncFunction("schedule") { json: String ->
+      val alarm = JSONObject(json)
+      if (alarm.optString("appBlockSelection").isNotEmpty()) {
+        check(AppBlockStore.authorized(context)) { "Allow Refresh app-blocking access before saving." }
+        AppBlockStore.validate(context, alarm.getString("appBlockSelection"))
+        AppBlockWindow.duration(alarm.optInt("appBlockMinutes", 5))
+      }
+      AlarmStore.schedule(context, alarm)
+    }
     AsyncFunction("cancel") { id: String -> AlarmStore.cancel(context, id) }
     Function("activeAlarm") {
       val active = AlarmStore.active(context)
@@ -44,6 +58,9 @@ class RefreshAlarmModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("missionActivity") { eventId: String ->
       AlarmRingService.missionActivity(eventId)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("missionActivityWithLimit") { eventId: String, limitMs: Long ->
+      AlarmRingService.missionActivity(eventId, limitMs)
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("stop") { alarmId: String ->
       if (AlarmStore.active(context)?.optString("alarmId") == alarmId) {

@@ -25,12 +25,8 @@ function save(name,layers,frames=180){
   console.log(name,`${(Buffer.byteLength(JSON.stringify(data))/1024).toFixed(1)} KB`);
 }
 const float = (x,y,amount=8) => anim([[0,[x,y,0]],[90,[x,y-amount,0]],[180,[x,y,0]]]);
-function face(scale=1){
-  const eye = x => ellipse('sleepy eye',5*scale,9*scale,C.ink,C.ink,[x*scale,-2*scale]);
-  return [ellipse('left warm cheek',15*scale,8*scale,C.peach,C.peach,[-25*scale,13*scale],65),ellipse('right warm cheek',15*scale,8*scale,C.peach,C.peach,[25*scale,13*scale],65),eye(-15),eye(15),line('little smile',[[-7*scale,13*scale],[0,16*scale],[7*scale,13*scale]],C.ink,3*scale)];
-}
 function sun(size=100){
-  return group('soft sunshine',[ellipse('sun underside',size,size,C.honey,C.honey,[0,5]),ellipse('sun clay',size,size,C.cream,C.honey),ellipse('thumbprint highlight',size*.53,size*.18,C.white,C.white,[-size*.12,-size*.28],30),...face(size/100)]);
+  return group('soft sunshine',[ellipse('sun underside',size,size,C.honey,C.honey,[0,5]),ellipse('sun clay',size,size,C.cream,C.honey),ellipse('thumbprint highlight',size*.53,size*.18,C.white,C.white,[-size*.12,-size*.28],30)]);
 }
 function sparkles(){
   return Array.from({length:9},(_,i)=>{
@@ -84,7 +80,7 @@ function sparkles(){
  layers.push(layer('stem',[line('stem',[[0,2],[0,-55],[8,-99]],C.green,10)],[160,226],{s:anim([[0,[100,40,100]],[46,[100,100,100]],[180,[100,100,100]]])}));
  const leaf=(name,p,rotation,delay)=>layer(name,[group('sculpted leaf',[ellipse('leaf underside',70,39,'#58877B','#58877B',[0,3]),ellipse('clay leaf',70,39,C.mint,C.green),line('leaf vein',[[-22,0],[18,0]],'#A7D2B7',2)])],p,{r:anim([[0,rotation-25],[50+delay,rotation],[120,rotation+4],[180,rotation]]),s:anim([[0,[35,35,100]],[50+delay,[100,100,100]],[180,[100,100,100]]])});
  layers.push(leaf('left leaf',[132,165],30,0),leaf('right leaf',[185,136],-35,9));
- layers.push(layer('seed pot',[group('pot',[rect('pot shadow',106,63,22,C.honey,C.honey,[0,5]),rect('peach pot',106,63,22,C.cream,C.peach),rect('rounded rim',119,18,9,C.cream,C.honey,[0,-25]),...face(.65)])],[160,230]));
+ layers.push(layer('seed pot',[group('pot',[rect('pot shadow',106,63,22,C.honey,C.honey,[0,5]),rect('peach pot',106,63,22,C.cream,C.peach),rect('rounded rim',119,18,9,C.cream,C.honey,[0,-25]),group('pot geometric inlay',[star(12,C.purple)],tr([0,4]))])],[160,230]));
  save('morning-bloom',layers);
 }
 // Transparent accent scene for the existing raster clay landscapes.
@@ -106,7 +102,14 @@ function cloud(name, x, y, scale=1) {
   v:[[29,-78],[-63,-28],[-51,56],[30,78],[79,22]],
   i:[[-80,25],[12,-32],[-18,-20],[-30,13],[0,27]],
   o:[[-42,-12],[-18,32],[24,34],[31,-14],[-80,30]],c:true})},grad(C.cream,C.honey,160),tr()]};
- layers.push(layer('sleeping moon',[group('moon',[crescent,ellipse('thumbprint',20,39,C.white,C.white,[-45,-8],24),line('closed left eye',[[-34,21],[-26,24],[-19,21]],C.ink,3),line('closed right eye',[[-6,32],[2,35],[9,32]],C.ink,3),ellipse('blush',16,8,C.peach,C.peach,[-18,39],80)])],[151,135],{p:float(151,135,9),r:anim([[0,-9],[90,-2],[180,-9]])}));
+ layers.push(layer('sleeping moon',[group('moon',[crescent,ellipse('thumbprint',20,39,C.white,C.white,[-45,-8],24)])],[151,135],{p:float(151,135,9),r:anim([[0,-9],[90,-2],[180,-9]])}));
+ layers.push(layer('little lantern',[group('clay lantern',[
+  ellipse('lantern dome',32,24,C.cream,C.honey,[0,-18]),
+  rect('lantern body',32,39,8,C.cream,C.peach),
+  rect('arched light',13,29,7,C.white,C.honey),
+  rect('lantern base',38,7,3,C.cream,C.honey,[0,20]),
+  ellipse('lantern finial',6,9,C.cream,C.honey,[0,-33]),
+ ])],[241,218]));
  layers.push(cloud('front cloud',124,239,1.12));
  layers.push(layer('dangling little star',[star(14,C.cream)],[244,112],{p:float(244,112,12),r:anim([[0,-12],[90,12],[180,-12]])}));
  save('moon-cradle',layers);
@@ -136,8 +139,7 @@ function cloud(name, x, y, scale=1) {
  const pieces=[line('left foot',[[-42,55],[-54,80]],C.purple,15),line('right foot',[[42,55],[54,80]],C.purple,15),
   ellipse('clock case edge',161,161,C.deep,C.deep,[0,7]),ellipse('clock case',161,161,C.lilac,C.purple),
   ellipse('face inset',137,137,'#7E679D','#7E679D'),ellipse('clock face',125,125,C.white,'#EDD2AF'),
-  ...Array.from({length:12},(_,i)=>group('hour marker',[rect('tick',i%3?3:5,i%3?5:9,2,C.purple,C.purple,[0,-51])],tr([0,0],[100,100],i*30))),
-  ellipse('left blush',14,7,C.peach,C.peach,[-29,21],70),ellipse('right blush',14,7,C.peach,C.peach,[29,21],70),line('smile',[[-8,27],[0,31],[8,27]],C.ink,3)];
+  ...Array.from({length:12},(_,i)=>group('hour marker',[rect('tick',i%3?3:5,i%3?5:9,2,C.purple,C.purple,[0,-51])],tr([0,0],[100,100],i*30)))];
  layers.push(layer('clock body',[group('clock',pieces)],[160,165],{p:float(160,165,4)}));
  for(const side of [-1,1]) layers.push(layer('soft alarm bell',[group('bell',[rect('bell edge',65,34,17,C.honey,C.honey,[0,4]),rect('clay bell',65,34,17,C.cream,C.peach)],tr())],[160+side*61,83],{r:anim([[0,side*29],[60,side*29],[68,side*18],[76,side*38],[84,side*18],[92,side*29],[180,side*29]]),p:float(160+side*61,83,4)}));
  layers.push(layer('hour hand',[line('hour',[[0,0],[-23,-20]],C.deep,6)],[160,165],{p:float(160,165,4)}));
@@ -197,4 +199,87 @@ function buttonDust(color, mode) {
  const bell=[ellipse('bell contact',33,8,C.deep,C.deep,[0,15]),rect('clay bell',29,32,14,C.lilac,C.purple,[0,-2]),rect('bell lip',37,7,4,C.lilac,C.purple,[0,12]),ellipse('clapper',8,8,C.honey,C.honey,[0,20]),ellipse('handle',9,7,C.purple,C.purple,[0,-22]),ellipse('thumbprint',6,14,C.white,C.white,[-7,-6],45)];
  layers.push(layer('ringing clay bell',[group('bell',bell)],[180,34],{r:anim([[0,-16],[4,16],[8,-13],[12,10],[16,-5],[20,0],[24,0]]),o:vanish}));
  saveButton('button-bell',layers);
+}
+
+// Mission collection: small, faceless clay objects with readable silhouettes.
+// Append new scenes so the established assets keep their deterministic layer IDs.
+function missionBase(width=170) {
+ return [...sparkles(),layer('soft contact shadow',[ellipse('shadow',width,15,'#151426')],[160,269])];
+}
+function clayTile(name,w,h,color,p=[0,0]) {
+ return group(name,[rect('raised underside',w,h,13,C.deep,C.deep,[0,5]),
+  rect('soft clay surface',w,h,13,color,color===C.cream?C.honey:C.purple),
+  ellipse('soft edge highlight',w*.58,5,C.white,C.white,[-w*.06,-h*.34],28)],tr(p));
+}
+{
+ const layers=missionBase();
+ layers.push(layer('winding number path',[line('trail',[[-83,35],[-61,-22],[0,30],[66,-30]],C.purple,9)],[160,162]));
+ const digits=[
+  [[-10,-9],[0,-17],[0,17]],
+  [[-12,-11],[-5,-18],[7,-18],[13,-10],[10,-3],[-12,17],[13,17]],
+  [[-12,-16],[12,-16],[0,0],[11,4],[13,12],[6,18],[-12,16]],
+ ];
+ for(const [i,[x,y]] of [[0,[87,170]],[1,[157,125]],[2,[226,193]]]) {
+  layers.push(layer(`number tile ${i+1}`,[group('number stone',[clayTile('stone',75,81,i===1?C.cream:C.lilac),line(`number ${i+1}`,digits[i],i===1?C.deep:C.white,7)])],[x,y],{p:float(x,y,5+i*2),r:anim([[0,i===1?5:-8],[90,i===1?-3:3],[180,i===1?5:-8]])}));
+ }
+ save('mission-number-trail',layers);
+}
+{
+ const layers=missionBase();
+ layers.push(layer('recall board',[group('rounded board',[rect('board edge',211,211,32,C.deep,C.deep,[0,7]),rect('lavender board',211,211,32,C.lilac,C.purple)])],[160,164]));
+ for(let i=0;i<9;i++) {
+  const x=102+(i%3)*58,y=106+Math.floor(i/3)*58;
+  layers.push(layer(`memory tile ${i+1}`,[clayTile('blank tile',46,46,C.purple)],[x,y]));
+  if([1,3,8].includes(i)) layers.push(layer(`remembered light ${i+1}`,[clayTile('lit blank tile',46,46,C.cream)],[x,y],{o:anim([[0,100],[60,100],[72,55],[100,55],[112,100],[165,100],[180,100]])}));
+ }
+ save('mission-tile-recall',layers);
+}
+{
+ const layers=missionBase();
+ layers.push(layer('echo board',[group('six-pad board',[rect('base edge',174,221,33,C.deep,C.deep,[0,7]),rect('sculpted base',174,221,33,C.lilac,C.purple)])],[160,165]));
+ for(let i=0;i<6;i++) {
+  const x=124+(i%2)*72,y=101+Math.floor(i/2)*64;
+  layers.push(layer(`echo pad ${i+1}`,[clayTile('pad',58,51,i%3===2?C.mint:C.purple)],[x,y]));
+  const order=[0,3,4].indexOf(i);
+  if(order>=0) {
+   const start=10+order*50;
+   layers.push(layer(`echo light ${i+1}`,[clayTile('warm light',58,51,C.cream)],[x,y],{o:anim([[0,0],[start,0],[start+8,100],[start+32,100],[start+42,0],[180,0]])}));
+  }
+ }
+ save('mission-pattern-echo',layers);
+}
+function littleCrescent() {
+ return {ty:'gr',nm:'faceless crescent',it:[{ty:'sh',ks:prop({
+  v:[[10,-27],[-22,-10],[-18,20],[10,27],[27,8]],
+  i:[[-28,9],[4,-11],[-6,-7],[-10,5],[0,9]],
+  o:[[-15,-4],[-6,11],[8,12],[11,-5],[-28,10]],c:true})},grad(C.cream,C.honey,60),tr()]};
+}
+{
+ const layers=missionBase(190);
+ const pages=[
+  group('left cover',[clayTile('cover',96,121,C.lilac)],tr([-48,8],[100,100],-7)),
+  group('right cover',[clayTile('cover',96,121,C.lilac)],tr([48,8],[100,100],7)),
+  group('left pages',[rect('page stack',82,104,13,C.cream,C.peach),...[-22,0,22].map(y=>line('page rule',[[-25,y],[23,y+4]],C.honey,4))],tr([-43,0],[100,100],-7)),
+  group('right pages',[rect('page stack',82,104,13,C.white,C.cream),...[-22,0,22].map(y=>line('page rule',[[-23,y+4],[25,y]],C.peach,4))],tr([43,0],[100,100],7)),
+  line('book spine',[[0,-43],[0,61]],C.purple,5),rect('ribbon bookmark',12,52,4,C.mint,C.green,[62,38]),
+ ];
+ layers.push(layer('open dua book',[group('open book',pages)],[160,188],{p:float(160,188,5),r:anim([[0,-3],[90,2],[180,-3]])}));
+ layers.push(layer('crescent above the pages',[littleCrescent()],[155,85],{p:float(155,85,7),r:anim([[0,-8],[90,4],[180,-8]])}));
+ layers.push(layer('small geometric star',[star(10,C.cream)],[214,88],{o:anim([[0,60],[90,100],[180,60]])}));
+ save('mission-duas',layers);
+}
+{
+ const layers=missionBase();
+ const arch=(name,color,scale=1)=>({ty:'gr',nm:name,it:[{ty:'sh',ks:prop({
+  v:[[-80,95],[-80,-10],[0,-103],[80,-10],[80,95]],
+  i:[[0,0],[0,35],[-26,28],[0,-45],[0,0]],
+  o:[[0,0],[0,-45],[26,28],[0,35],[0,0]],c:true})},grad(color,color===C.lilac?C.purple:C.deep,190),tr([0,0],[scale*100,scale*100])]});
+ layers.push(layer('dawn arch',[group('arched window',[arch('outer clay arch',C.lilac),arch('recessed sky',C.deep,.77)])],[160,157]));
+ const rays=Array.from({length:7},(_,i)=>group('soft sunrise ray',[rect('ray',5,14,3,C.cream,C.honey,[0,-52])],tr([0,0],[100,100],-90+i*30)));
+ layers.push(layer('faceless dawn',[group('sunrise',[...rays,sun(63)])],[160,159],{p:anim([[0,[160,168,0]],[90,[160,152,0]],[180,[160,168,0]]])}));
+ layers.push(layer('dawn horizon',[group('quiet morning',[rect('horizon',118,25,11,C.lilac,C.purple,[0,0]),rect('sage horizon',118,24,10,C.mint,C.green,[0,18]),rect('arch sill',185,18,9,C.cream,C.honey,[0,43])])],[160,204]));
+ layers.push(layer('lantern beside the arch',[group('morning lantern',[
+  ellipse('dome',30,23,C.cream,C.honey,[0,-21]),rect('lantern frame',33,42,8,C.cream,C.honey),
+  rect('warm window',15,29,7,C.white,C.peach),rect('foot',39,7,4,C.cream,C.honey,[0,24]),ellipse('finial',6,10,C.cream,C.honey,[0,-36])])],[245,231],{o:anim([[0,82],[90,100],[180,82]])}));
+ save('mission-fajr',layers);
 }

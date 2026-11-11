@@ -79,6 +79,8 @@ function AppContent() {
       if (wakeScreen) router.replace(target); else router.push(target);
     };
     const readNative = async () => {
+      // Do not open the JS audio handoff behind iOS's system alarm presentation.
+      if (Platform.OS === "ios" && AppState.currentState !== "active") return;
       // Let the index redirect finish before consuming a cold-launch intent.
       if (route.current.pathname === "/") return;
       if (AndroidAlarm) {
@@ -121,6 +123,9 @@ function AppContent() {
     const tick = setInterval(() => {
       if (AppState.currentState && AppState.currentState !== "active") return;
       const now = new Date();
+      // Also reap expired Screen Time shields while Refresh is foregrounded.
+      // The native extension owns background delivery and release.
+      AlarmKit?.appBlockStatus?.();
       const state = snapshot.current;
       for (const alarm of state.alarms)
         if (

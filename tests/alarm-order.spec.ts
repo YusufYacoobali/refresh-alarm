@@ -34,7 +34,7 @@ test("defaults to time order, long press moves both ways and persists without ch
   await drag(page, "alarm-1", "alarm-2");
   await expect.poll(() => order(page)).toEqual(["alarm-1", "alarm-2", "alarm-3"]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("daybreak.state.v1")!).alarms)).toEqual(before);
-  await page.getByRole("button", { name: "Edit Alarm 1 at 1:00", exact: true }).click();
+  await page.getByRole("button", { name: "Edit alarm at 1:00 AM", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save alarm", exact: true })).toBeVisible();
 });
 

@@ -3,7 +3,7 @@ import * as Notifications from "expo-notifications";
 import * as Crypto from "expo-crypto";
 import AlarmKit from "./alarm-kit";
 import AndroidAlarm from "./android-alarm";
-import { Alarm, Registration, nextOccurrence } from "@/utils/alarms";
+import { Alarm, Registration, nextOccurrence, ALARM_NAMING_ENABLED } from "@/utils/alarms";
 import { soundFile, resolveSoundId, isCustomSound } from "@/utils/sounds";
 import { customAudioSource } from "./custom-audio";
 
@@ -61,12 +61,24 @@ export async function scheduleAlarm(
   at?: Date,
   reuse?: Registration,
 ): Promise<Registration> {
+  const label = ALARM_NAMING_ENABLED ? alarm.label : "Refresh alarm";
+  if (Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && !alarmKitAvailable())
+    throw new Error("This iPhone needs an updated Refresh build with system alarm support. Your alarm has not been enabled.");
   const permission = await requestPermission();
   if (permission === "denied")
     throw new Error(
       "Alarm permission is off. Enable it in Settings, then try again. Your alarm has not been enabled.",
     );
   if (Platform.OS === "web") return { kind: "preview", ids: [] };
+  if (alarm.appBlock?.enabled) {
+    const bridge = Platform.OS === "ios" ? AlarmKit : AndroidAlarm;
+    if ((alarm.appBlock.minutes ?? 5) !== 5 && bridge?.appBlockVersion?.() !== 2)
+      throw new Error("Install the updated Refresh build to use selectable app-block durations.");
+    if (!bridge?.appBlockStatus?.().authorized)
+      throw new Error("Allow app-blocking access in this alarm’s settings, then save again.");
+    if (Platform.OS === "ios" && !alarmKitAvailable())
+      throw new Error("App blocking with system alarms requires iOS 26 or later.");
+  }
   const imported = isCustomSound(alarm.sound) ? await customAudioSource(alarm.sound) : undefined;
   if (imported && Platform.OS === "ios" && !soundFile(alarm.sound)) throw new Error("Import this sound again to prepare its iOS alarm excerpt.");
   if (Platform.OS === "android") {
@@ -86,11 +98,13 @@ export async function scheduleAlarm(
     }
     const id = reuse?.kind === "android" ? reuse.ids[0] : Crypto.randomUUID();
     const sound = resolveSoundId(alarm.sound);
-    const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.mp3` : soundFile(alarm.sound);
-    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label: alarm.label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
+    const audio = sound === "adhan" || sound === "adhan_alafasy_fajr" ? `refresh_full_${sound}.wav` : soundFile(alarm.sound);
+    await AndroidAlarm.schedule(JSON.stringify({ id, alarmId: alarm.id, hour: alarm.hour, minute: alarm.minute, days: at ? [] : alarm.days, label, soundName: audio, soundUri: imported?.uri, volume: alarm.volume, volumeRampSeconds: alarm.volumeRampSeconds ?? 0, missionReminder: true, appBlockMinutes: alarm.appBlock?.minutes ?? 5, appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined, ...(at ? { timestamp: +at } : !alarm.days.length ? { timestamp: +nextOccurrence(alarm) } : {}) }));
     return { kind: "android", ids: [id] };
   }
   if (alarmKitAvailable()) {
+    if (alarm.volume !== undefined && alarm.volume < 1 && AlarmKit!.soundVolumeVersion?.() !== 1)
+      throw new Error("Install the updated Refresh iOS build to apply your chosen volume on the system alarm screen, then save this alarm again.");
     const id = reuse?.kind === "alarmkit" ? reuse.ids[0] : Crypto.randomUUID();
     if (
       reuse?.kind === "alarmkit" &&
@@ -103,8 +117,11 @@ export async function scheduleAlarm(
       hour: alarm.hour,
       minute: alarm.minute,
       days: alarm.days,
-      label: alarm.label,
+      label,
       soundName: soundFile(alarm.sound),
+      volume: alarm.volume,
+      appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined,
+      appBlockMinutes: alarm.appBlock?.enabled ? alarm.appBlock.minutes ?? 5 : undefined,
       ...(at ? { timestamp: at.getTime() / 1000 } : {}),
     });
     return { kind: "alarmkit", ids: [id] };
@@ -113,11 +130,14 @@ export async function scheduleAlarm(
   const audioFile = soundFile(alarm.sound);
   const channelId = audioFile ? `alarm-${resolveSoundId(alarm.sound)}-v1` : "alarms";
   const content: Notifications.NotificationContentInput = {
-    title: alarm.label,
+    title: label,
     body: "Time to wake up.",
     sound: audioFile ?? "default",
     data: { alarmId: alarm.id },
     categoryIdentifier: "wake-up",
+    // On older iOS versions, avoid treating a wake-up alert as routine content
+    // eligible for Scheduled Summary. User notification settings still apply.
+    ...(Platform.OS === "ios" ? { interruptionLevel: "timeSensitive" as const } : {}),
   };
   try {
     if (at || !alarm.days.length)
