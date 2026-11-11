@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeWheel } from "@/components/time-wheel";
 import { AlarmSwitch } from "@/components/alarm-switch";
 import { AppBlockSettings } from "@/components/app-block-settings";
+import { useExpansionDiagnostics } from "@/components/use-expansion-diagnostics";
 import { Host, Slider } from "@expo/ui";
 import { Image } from "expo-image";
 import { pickWallpaper } from "@/services/wallpaper";
@@ -68,7 +69,12 @@ export function AlarmEditor() {
   const [choosingPhoto, setChoosingPhoto] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [section, setSection] = useState<"sound" | "missions" | "more" | null>(null);
-  const toggleSection = (next: "sound" | "missions" | "more") => setSection(current => current === next ? null : next);
+  const expansion = useExpansionDiagnostics("alarm-editor", section);
+  const repeatExpansion = useExpansionDiagnostics("alarm-repeat", repeatOpen ? "repeat" : null);
+  const toggleSection = (next: "sound" | "missions" | "more") => {
+    expansion.press(next);
+    setSection(current => current === next ? null : next);
+  };
   useEffect(() => {
     if (!draft) edit();
   }, []);
@@ -107,7 +113,7 @@ export function AlarmEditor() {
           {displayTime(draft)} {draft.hour < 12 ? "AM" : "PM"} · {timeUntil(nextOccurrence(draft))} from now
         </T>
       </View>
-      <Card>
+      <Card animated={Platform.OS !== "android"}>
         <Row
           icon="repeat-outline"
           title="Repeat"
@@ -122,10 +128,10 @@ export function AlarmEditor() {
                   ? `${draft.days.length} days`
                   : "Once"
           }
-          onPress={() => setRepeatOpen(!repeatOpen)}
+          onPress={() => { repeatExpansion.press("repeat"); setRepeatOpen(value => !value); }}
         />
         {repeatOpen && (
-          <Animated.View entering={reduced || Platform.OS === "android" ? undefined : FadeInDown.duration(220)} exiting={reduced || Platform.OS === "android" ? undefined : FadeOutUp.duration(160)} layout={reduced || Platform.OS === "android" ? undefined : LinearTransition.duration(240)} style={{ padding: 16, gap: 14 }}>
+          <Animated.View {...repeatExpansion.body("repeat")} entering={reduced || Platform.OS === "android" ? undefined : FadeInDown.duration(220)} exiting={reduced || Platform.OS === "android" ? undefined : FadeOutUp.duration(160)} layout={reduced || Platform.OS === "android" ? undefined : LinearTransition.duration(240)} style={{ padding: 16, gap: 14 }}>
             <View style={{ flexDirection: "row", gap: 5 }}>
               {[1, 2, 3, 4, 5, 6, 0].map((day) => (
                 <Tap
@@ -201,7 +207,7 @@ export function AlarmEditor() {
           />
         </Row>}
       </Card>
-      <Card>
+      <Card animated={Platform.OS !== "android"}>
         <Row
           icon="musical-notes-outline"
           title="Sound & volume"
@@ -211,7 +217,7 @@ export function AlarmEditor() {
         />
         {section === "sound" && <>
           <Row icon="musical-note-outline" title="Choose sound" value={soundName(draft.sound)} onPress={() => router.push({ pathname: "/sounds", params: { editing: "1" } })} />
-          <View style={{ padding: 18, gap: 14 }}>
+          <View {...expansion.body("sound")} style={{ padding: 18, gap: 14 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <T>Alarm volume</T><T style={{ color: c.lavender }}>{draft.volume === undefined ? "Device volume" : `${Math.round(draft.volume * 100)}%`}</T>
             </View>
@@ -231,7 +237,7 @@ export function AlarmEditor() {
           </View>
         </>}
       </Card>
-      <Card>
+      <Card animated={Platform.OS !== "android"}>
         <Row
           icon="extension-puzzle-outline"
           title="Wake-up missions"
@@ -239,17 +245,17 @@ export function AlarmEditor() {
           onPress={() => toggleSection("missions")}
           last={section !== "missions"}
         />
-        {section === "missions" && <>
+        {section === "missions" && <View {...expansion.body("missions")}>
         <Row icon="extension-puzzle-outline" title="Choose missions" value={draft.missionMode === "mystery" ? "Mystery Mode" : draft.missions?.length ? `${draft.missions.length} selected` : "Choose your routine"} onPress={() => router.push({ pathname: "/challenges", params: { editing: "1" } })} />
         <Row icon="volume-mute-outline" title="Silent during missions">
           <AlarmSwitch label="Silent during missions" testID="silent-missions" disabled={busy} value={draft.silentMissions ?? data.silentMissions ?? true} onValueChange={silentMissions => updateDraft({ silentMissions })} />
         </Row>
         <T variant="small" style={{ paddingHorizontal: 18, paddingBottom: 18, color: c.muted }}>Each mission has a 1-minute timer. If it runs out, the alarm rings again and all missions restart.</T>
-        </>}
+        </View>}
       </Card>
-      <Card>
+      <Card animated={Platform.OS !== "android"}>
         <Row icon="options-outline" title="More options" value={`${draft.snooze ? `${draft.snooze} min snooze` : "Snooze off"}${draft.wallpaper ? " · Photo" : ""}`} onPress={() => toggleSection("more")} last={section !== "more"} />
-        {section === "more" && <>
+        {section === "more" && <View {...expansion.body("more")}>
         <Row icon="image-outline" title="Alarm background" value={choosingPhoto ? "Opening photos…" : draft.wallpaper ? "Your photo" : "Choose a photo"} onPress={() => void chooseWallpaper()} />
         {draft.wallpaper && <View style={{ padding: 16, gap: 12 }}>
           <Image source={{ uri: draft.wallpaper }} contentFit="cover" style={{ height: 150, borderRadius: 16 }} accessibilityLabel="Selected alarm background" />
@@ -259,7 +265,7 @@ export function AlarmEditor() {
         <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 18 }}>
           {[0, 5, 10, 15].map(minutes => <Chip key={minutes} title={minutes === 0 ? "Off" : `${minutes} min`} active={draft.snooze === minutes} onPress={() => updateDraft({ snooze: minutes })} />)}
         </View>
-        </>}
+        </View>}
       </Card>
       <AppBlockSettings alarm={draft} onChange={updateDraft} />
       <View

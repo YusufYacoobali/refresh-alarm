@@ -63,7 +63,7 @@ export function Sounds() {
       {!visibleSounds.length && <Card style={{ padding: 24, alignItems: "center", gap: 10 }}><Icon name="musical-notes-outline" color={c.lavender} size={28} /><T style={{ color: c.muted }}>No custom sounds yet.</T></Card>}
     </View>}
     {error && <T accessibilityLiveRegion="polite" style={{ color: c.peach }}>{error}</T>}
-    {!!visibleSounds.length && <Card>
+    {!!visibleSounds.length && <Card animated={Platform.OS !== "android"}>
       {visibleSounds.map(sound => <View key={sound.id} style={{ flexDirection: "row", alignItems: "center", paddingRight: 14, borderBottomWidth: 1, borderBottomColor: c.line }}>
         <Tap label={`Select ${sound.name}`} selected={selected === sound.id} style={{ flex: 1 }} onPress={() => { setSelected(sound.id); stop(); }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 16 }}>
