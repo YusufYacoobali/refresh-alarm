@@ -23,11 +23,11 @@ const alarm = { id: 'a', hour: 7, minute: 0, days: [0,1,2,3,4,5,6], label: 'Wake
   challenge: 'math', difficulty: 'gentle', snooze: 5, registration: { kind: 'alarmkit', ids: ['primary'] } };
 const handoff = { alarmId: 'a', occurrenceId: 'primary:morning', registrationId: 'primary', sessionId: 'primary:morning',
   scheduledAt: 100, createdAt: 110, kind: 'scheduled', source: 'stop', deferred: false };
-function reader(kit, timeout = null, android = null, os = 'ios') {
+function reader(kit, timeout = null, android = null, os = 'ios', now) {
   return load('src/services/wake-handoff.ts', {
     'react-native': { Platform: { OS: os } }, './alarm-kit': kit, './android-alarm': android,
     './mission-timeout': { readMissionTimeout: async () => timeout }, '@/utils/wake-session': sessions,
-  });
+  }, now === undefined ? {} : { Date: class extends Date { static now() { return now; } } });
 }
 test('real native reader resumes a durable Stop after termination without requiring an alerting alarm or consuming evidence', async () => {
   const disk = [plain(handoff)]; let reads = 0;
@@ -64,7 +64,7 @@ test('native read errors and corrupt records propagate instead of silently resol
   }
 });
 test('legacy handoffs adopt the persisted Mystery session without generating or modifying its routine', async () => {
-  const saved = { id: 'v3-session', missions: [{ kind: 'supplication', duaIds: ['protection', 'waking'] }] };
+  const saved = { id: 'v3-session', startedAt: handoff.scheduledAt, missions: [{ kind: 'supplication', duaIds: ['protection', 'waking'] }] };
   const calls = [];
   const kit = { isSupported: () => true, pendingWakeups: async () => [{ ...handoff, source: 'legacy' }],
     adoptWakeup: async (...args) => calls.push(args) };
@@ -208,7 +208,8 @@ test('older Android binaries distinguish a fresh day from a reminder even withou
 });
 
 function mixedReader(initial, registrations, options = {}) {
-  const disk = plain(initial), captures = [], logs = [];
+  const disk = plain(initial), captures = [], logs = [], adoptions = [];
+  const now = options.now ?? handoff.scheduledAt, at = options.now === undefined ? handoff.scheduledAt : new Date(now).setHours(0, 0, 0, 0);
   let reads = 0;
   const saved = [alarm, { ...alarm, id: 'b', registration: { kind: 'alarmkit', ids: ['older-b'] } },
     { ...alarm, id: 'c', registration: { kind: 'alarmkit', ids: ['older-c'] } }];
@@ -219,12 +220,17 @@ function mixedReader(initial, registrations, options = {}) {
       captures.push(registrationId);
       if (options.captureFailure === registrationId) throw new Error('capture');
       if (options.completed?.includes(registrationId)) return;
-      if (!disk.some(r => r.registrationId === registrationId)) disk.push({ ...handoff, alarmId, registrationId,
-        occurrenceId: `${registrationId}:morning`, sessionId: `${registrationId}:morning`, createdAt: 200 + disk.length, source: 'legacy' });
+      if (!disk.some(r => r.registrationId === registrationId && new Date(r.scheduledAt).toDateString() === new Date(at).toDateString())) {
+        const occurrenceId = options.now === undefined ? `${registrationId}:morning` : `${registrationId}:${at}`;
+        disk.push({ ...handoff, alarmId, registrationId, occurrenceId, sessionId: occurrenceId, scheduledAt: at,
+          createdAt: options.now ?? 200 + disk.length, source: 'legacy' });
+      }
+    }, adoptWakeup: async (occurrenceId, sessionId) => {
+      adoptions.push([occurrenceId, sessionId]); disk.find(r => r.occurrenceId === occurrenceId).sessionId = sessionId;
     }, logWakeHandoff: (...args) => logs.push(args),
   };
-  const adapter = reader(kit);
-  return { disk, captures, logs, reads: () => reads, read: async () => plain(await adapter.readNativeWakeups({ alarms: saved })), saved, kit };
+  const adapter = reader(kit, options.timeout, null, 'ios', now);
+  return { disk, captures, logs, adoptions, reads: () => reads, read: async () => plain(await adapter.readNativeWakeups({ alarms: saved, wakeSessions: options.wakeSessions, snoozed: options.snoozed })), saved, kit };
 }
 test('a new active alarm already represented natively remains single and ordered', async () => {
   const h = mixedReader([handoff], [{ id: 'primary', state: 'alerting' }]);
@@ -366,4 +372,69 @@ test('boot shows progress then a single Open wake-up screen action when the real
   assert.equal(nodes(h.boot()).filter(n => n.props.title === 'Open wake-up screen').length, 1);
   assert.ok(!nodes(h.layer(true)).some(n => n.props.testID === 'wake-handoff-recovery'));
   assert.equal(h.queue.length, 1); h.dispose();
+});
+
+function datedLegacy(at, patch = {}) {
+  const scheduledAt = new Date(at).setHours(0, 0, 0, 0), occurrenceId = `older-b:${scheduledAt}`;
+  return { ...handoff, alarmId: 'b', registrationId: 'older-b', occurrenceId, sessionId: occurrenceId,
+    scheduledAt, createdAt: at, source: 'legacy', ...patch };
+}
+test("yesterday's pending legacy handoff cannot hide today's alerting occurrence of the same registration", async () => {
+  const now = +new Date(2026, 10, 11, 8), yesterday = datedLegacy(+new Date(2026, 10, 10, 8));
+  const h = mixedReader([yesterday], [{ id: 'older-b', state: 'alerting' }, { id: 'older-b', state: 'alerting' }], { now });
+  const first = await h.read(), again = await h.read();
+  assert.deepEqual(h.captures, ['older-b']); assert.equal(first.length, 2);
+  assert.deepEqual(h.disk[0], yesterday); assert.equal(first[0].eventId, yesterday.occurrenceId);
+  assert.equal(first[1].eventId, `older-b:${new Date(now).setHours(0, 0, 0, 0)}`);
+  assert.notEqual(first[0].sessionId, first[1].sessionId); assert.deepEqual(again, first);
+});
+test('occurrence coverage uses scheduledAt even if yesterday was only read or stopped today', async () => {
+  const now = +new Date(2026, 10, 11, 8), yesterday = datedLegacy(+new Date(2026, 10, 10, 8), { createdAt: now });
+  const h = mixedReader([yesterday], [{ id: 'older-b', state: 'alerting' }], { now });
+  assert.equal((await h.read()).length, 2); assert.deepEqual(h.captures, ['older-b']);
+});
+test('the same local occurrence date remains covered across UTC midnight and a long DST day', async () => {
+  const now = +new Date(2026, 10, 1, 23, 30), today = datedLegacy(+new Date(2026, 10, 1, 0, 0));
+  if (process.env.TZ === 'America/New_York') {
+    assert.equal((now - today.scheduledAt) / 3600000, 24.5);
+    assert.notEqual(new Date(now).toISOString().slice(0, 10), new Date(today.scheduledAt).toISOString().slice(0, 10));
+  }
+  const h = mixedReader([today], [{ id: 'older-b', state: 'alerting' }], { now });
+  assert.equal((await h.read()).length, 1); assert.deepEqual(h.captures, []);
+});
+test('crossing local midnight permits recovery even when the pending handoff is less than 24 hours old', async () => {
+  const now = +new Date(2026, 10, 11, 0, 30), yesterday = datedLegacy(+new Date(2026, 10, 10, 23, 30));
+  yesterday.scheduledAt = +new Date(2026, 10, 10, 23, 30);
+  const h = mixedReader([yesterday], [{ id: 'older-b', state: 'alerting' }], { now });
+  assert.equal((await h.read()).length, 2); assert.deepEqual(h.captures, ['older-b']);
+});
+test("today's legacy recovery cannot adopt yesterday's persisted Mystery session", async () => {
+  const now = +new Date(2026, 10, 11, 8), at = +new Date(2026, 10, 10, 8);
+  const saved = { id: 'v3-yesterday', startedAt: at, occurrenceKey: `b:${at}`, missions: [
+    { kind: 'math', difficulty: 'gentle' }, { kind: 'shake', difficulty: 'gentle' },
+    { kind: 'supplication', difficulty: 'gentle', duaIds: ['protection', 'waking'] },
+  ] };
+  const yesterday = datedLegacy(at, { sessionId: saved.id }), wakeSessions = { b: saved }, before = JSON.stringify(wakeSessions);
+  const h = mixedReader([yesterday], [{ id: 'older-b', state: 'alerting' }], { now, wakeSessions });
+  const result = await h.read();
+  assert.equal(result.length, 2); assert.equal(result[0].sessionId, saved.id); assert.notEqual(result[1].sessionId, saved.id);
+  assert.deepEqual(h.adoptions, []); assert.equal(JSON.stringify(wakeSessions), before);
+});
+test('an undated UserDefaults import retains its original Mystery snapshot across a delayed launch', async () => {
+  const now = +new Date(2026, 10, 11, 8), saved = { id: 'v3-yesterday', startedAt: +new Date(2026, 10, 10, 8), missions: [] };
+  const record = { ...datedLegacy(now), registrationId: 'legacy:b', occurrenceId: 'legacy:b:imported', sessionId: 'legacy:b:imported' };
+  const h = mixedReader([record], [], { now, wakeSessions: { b: saved } });
+  assert.equal((await h.read())[0].sessionId, saved.id); assert.deepEqual(h.adoptions, [[record.occurrenceId, saved.id]]);
+});
+
+for (const kind of ['snooze', 'timeout']) test(`a legacy ${kind} registration after midnight retains its explicitly linked Mystery session`, async () => {
+  const now = +new Date(2026, 10, 11, 0, 1), saved = { id: 'v3-yesterday', startedAt: +new Date(2026, 10, 10, 23, 59), missions: [] };
+  const registrationId = `legacy-${kind}`, occurrenceId = `${registrationId}:${new Date(now).setHours(0, 0, 0, 0)}`;
+  const record = datedLegacy(now, { registrationId, occurrenceId, sessionId: occurrenceId });
+  const registration = { kind: 'alarmkit', ids: [registrationId] };
+  const options = { now, wakeSessions: { b: saved }, ...(kind === 'snooze' ? {
+    snoozed: { alarmId: 'b', at: now, sessionId: saved.id, registration },
+  } : { timeout: { alarmId: 'b', deadline: now, registration } }) };
+  const h = mixedReader([record], [], options);
+  assert.equal((await h.read())[0].sessionId, saved.id); assert.deepEqual(h.adoptions, [[occurrenceId, saved.id]]);
 });

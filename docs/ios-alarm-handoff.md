@@ -14,6 +14,14 @@ Every resolution independently checks actual AlarmKit `.alerting` registrations,
 
 This follow-up changes only `src/utils/wake-handoff.ts`, its unit tests, `src/components/wake-handoff-router.tsx`, `src/app/index.tsx`, `src/components/screen-error-layer.tsx`, `src/services/wake-handoff.ts`, `scripts/ios-handoff.test.cjs` and this report. There are no new native APIs, Swift edits, scheduling changes, dependencies or entitlements. It uses the durable native bridge from `dc0c2b6`; a build that predates that bridge still needs the native rebuild described below.
 
+## Occurrence-date follow-up
+
+The recovery coverage check now matches both the native registration ID and the local calendar date of `scheduledAt`. Yesterday's pending record is preserved, but cannot suppress today's actually alerting legacy occurrence. Matching follows the native legacy store's local-day convention, including daylight-saving changes and local midnight, rather than UTC dates or a rolling 24-hour window. Recovery still requires actual `.alerting` evidence and native confirmation.
+
+Legacy Mystery adoption also checks the occurrence date so a newly recovered morning cannot adopt yesterday's snapshot. Undated UserDefaults imports retain their migration behavior, and explicitly linked snooze/timeout registration IDs preserve the original session across midnight. Scheduling, sounds, configuration and native code are unchanged.
+
+Validation for this follow-up: TypeScript passed; all 152 unit tests passed; all 41 mocked iOS handoff tests also passed with `TZ=America/New_York`, including the 25-hour DST day and local/UTC midnight cases. The new stale-occurrence tests failed before the fix. Physical iPhone verification remains unavailable. Changes are confined to `src/services/wake-handoff.ts`, `scripts/ios-handoff.test.cjs` and this report.
+
 ## Findings and evidence
 
 These weaknesses were **confirmed by source inspection**. They explain loss and routing opportunities, but none establishes which failure occurred on the reported iPhone without device logs.
@@ -101,7 +109,7 @@ Completion is written to AsyncStorage before native acknowledgement. If native c
 | `package.json` | Include new tests in the existing unit command. |
 | `docs/ios-alarm-handoff.md` | Findings, implementation, verification and remaining device checks. |
 
-## Verification
+## Verification at the preceding final review
 
 - `npm run typecheck`: passed.
 - `npm run test:unit`: 144 passed. Includes all eleven requested mocked scenarios plus missing-data protection, legacy recovery, no time-only inference, delayed navigation commits, cleanup failures across mornings, actual provider completion/snooze/cold-hydration behavior and native safety ownership. Adds watchdog timing, wrong-route rejection, slow/late commits, explicit retries, stalled reads, background pauses, target invalidation, mixed old/new registrations, capture/read failures, identity deduplication and real-hook/boot/focused-screen retry wiring. Existing Manual/Mystery/Fajr, audio onset, scheduling/volume and session tests remain included.

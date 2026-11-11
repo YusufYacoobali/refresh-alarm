@@ -21,6 +21,9 @@ function alarmForRegistration(data: WakeRoutingData, id: string) {
   return data.alarms.find(a => a.registration?.ids.includes(id))?.id ??
     (data.snoozed?.registration.ids.includes(id) ? data.snoozed.alarmId : undefined);
 }
+// Match Calendar.current's local-day identity for native legacy occurrences,
+// including DST changes; neither a UTC date nor a rolling 24-hour window fits.
+const occurrenceDate = (at: number) => new Date(at).toDateString();
 function validateNative(record: NativeWakeHandoff) {
   if (!record || typeof record.alarmId !== "string" || !record.alarmId || typeof record.occurrenceId !== "string" || !record.occurrenceId ||
     typeof record.sessionId !== "string" || !record.sessionId || typeof record.registrationId !== "string" || !record.registrationId ||
@@ -72,7 +75,8 @@ export async function readNativeWakeups(data: WakeRoutingData): Promise<WakeCand
     if (!records.length) throw error;
     logWakeHandoff("handoff.observe.deferred", "", "active_lookup_failed_pending_retained");
   }
-  const represented = new Set(records.map(record => record.registrationId));
+  const observedDate = occurrenceDate(Date.now());
+  const represented = new Set(records.filter(record => occurrenceDate(record.scheduledAt) === observedDate).map(record => record.registrationId));
   let captured = false, captureFailure: unknown;
   for (const native of active.filter(a => a.state === "alerting")) {
     if (represented.has(native.id)) continue;
@@ -106,7 +110,16 @@ export async function readNativeWakeups(data: WakeRoutingData): Promise<WakeCand
   for (const record of unique.values()) {
     let sessionId = record.sessionId;
     const saved = data.wakeSessions?.[record.alarmId];
-    if (record.source === "legacy" && saved && saved.id !== sessionId) {
+    // Imports lack a historical date; explicit snooze/timeout registrations can
+    // continue across midnight. A fresh morning must not adopt yesterday's routine.
+    const undatedImport = record.occurrenceId === `legacy:${record.alarmId}:imported`;
+    const snoozed = data.snoozed;
+    const continuation = (snoozed?.alarmId === record.alarmId && snoozed.registration.ids.includes(record.registrationId) &&
+      (!snoozed.sessionId || snoozed.sessionId === saved?.id)) ||
+      (timeout?.alarmId === record.alarmId && timeout.registration.ids.includes(record.registrationId) &&
+      (!timeout.sessionId || timeout.sessionId === saved?.id));
+    if (record.source === "legacy" && saved && saved.id !== sessionId &&
+        (undatedImport || continuation || occurrenceDate(record.scheduledAt) === occurrenceDate(saved.startedAt))) {
       await AlarmKit.adoptWakeup?.(record.occurrenceId, saved.id);
       sessionId = saved.id;
     }
