@@ -77,7 +77,7 @@ test("Set Order and Random Pick settings remain independent through switching, p
   await expect(page.getByRole("button", { name: "Math puzzle", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Shake to wake", exact: true })).toBeDisabled();
   for (const title of ["Contentment in faith", "Seeking protection"]) await page.getByRole("button", { name: `Dua: ${title}`, exact: true }).click();
-  await expect(page.getByRole("button", { name: "Dua: Upon waking", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Dua: Upon waking", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Fajr reminder", exact: true }).click();
   await expect(page.getByText("2 ELIGIBLE GAMES", { exact: true })).toBeVisible();
   await page.getByTestId("rounds-math").selectOption("4");
@@ -473,4 +473,65 @@ test("new alarms stay in Set Order when choosing Fajr without enabling Random Pi
   expect(created.missionMode ?? "manual").toBe("manual");
   expect(created.mystery).toBeUndefined();
   expect(created.missions).toEqual([{ kind: "fajr_reminder", difficulty: "gentle" }]);
+});
+
+for (const fajr of [false, true]) test(`Random Pick can save and complete without any duas, with Fajr ${fajr ? "on" : "off"}`, async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  const original = (await saved(page)).alarms[0];
+  const openPicker = async () => {
+    await page.getByRole("button", { name: /^Edit alarm at/ }).click();
+    await page.getByRole("button", { name: /Wake-up missions/ }).click();
+    await page.getByRole("button", { name: /Choose missions/ }).click();
+  };
+  const duaTitles = ["Upon waking", "Contentment in faith", "Seeking protection"];
+  const supplication = page.getByRole("button", { name: "Islamic supplication", exact: true });
+  await openPicker();
+  for (const title of duaTitles) {
+    const dua = page.getByRole("button", { name: `Dua: ${title}`, exact: true });
+    await expect(dua).toBeEnabled(); await dua.click(); await expect(dua).toHaveAttribute("aria-pressed", "false");
+  }
+  await expect(supplication).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Preview Islamic supplication", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Math puzzle", exact: true })).toBeDisabled();
+  // Zero selections remain editable; the whole card can select or clear all.
+  await page.getByRole("button", { name: "Dua: Upon waking", exact: true }).click();
+  await expect(supplication).toHaveAttribute("aria-pressed", "true");
+  await supplication.click(); await expect(supplication).toHaveAttribute("aria-pressed", "false");
+  await supplication.click();
+  for (const title of duaTitles) await expect(page.getByRole("button", { name: `Dua: ${title}`, exact: true })).toHaveAttribute("aria-pressed", "true");
+  await supplication.click();
+  if (!fajr) await page.getByRole("button", { name: "Fajr reminder", exact: true }).click();
+  await page.getByRole("button", { name: "Set Order", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Dua: Upon waking", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Dua: Upon waking", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
+  for (const title of duaTitles) await expect(page.getByRole("button", { name: `Dua: ${title}`, exact: true })).toHaveAttribute("aria-pressed", "false");
+  const use = page.getByRole("button", { name: "Use Random Pick", exact: true });
+  await expect(use).toBeEnabled(); await use.click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  await page.reload();
+  const configured = (await saved(page)).alarms[0];
+  expect(configured.mystery).toEqual({ ...original.mystery, duaIds: [], fajr });
+  expect(configured.missions).toEqual(original.missions);
+  await openPicker();
+  await expect(supplication).toHaveAttribute("aria-pressed", "false");
+  for (const title of duaTitles) await expect(page.getByRole("button", { name: `Dua: ${title}`, exact: true })).toHaveAttribute("aria-pressed", "false");
+  await page.goto("/ringing?id=mystery&eventId=no-duas");
+  await page.getByRole("button", { name: "Wake up my mind", exact: true }).click();
+  const first = await session(page);
+  expect(first.missions.some((m: any) => m.kind === "supplication")).toBe(false);
+  expect(first.missions).toHaveLength(2 + Number(fajr));
+  if (fajr) expect(first.missions.at(-1).kind).toBe("fajr_reminder");
+  await page.clock.fastForward(60000);
+  await expect(page.getByTestId("alarm-wallpaper-screen")).toBeVisible();
+  expect(await session(page)).toEqual(first);
+  await page.goto("/challenge?id=mystery&eventId=native%3Areminder%3Ano-duas&reminder=1");
+  await page.reload();
+  await expect(page.getByText(`Mission 1 of ${first.missions.length}`, { exact: true })).toBeVisible();
+  expect(await session(page)).toEqual(first);
+  await finishRoutine(page, first.missions);
+  expect(await session(page)).toBeUndefined();
+  expect((await saved(page)).fajrReminderIndex).toBe(fajr ? 3 : 2);
 });

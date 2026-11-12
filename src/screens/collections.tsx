@@ -110,7 +110,7 @@ export function Challenges() {
   if (mode === "mystery") { try { validateMystery(mystery); } catch (e) { configError = e instanceof Error ? e.message : "Repair your Mystery settings."; } }
   const selected: Mission[] = mode === "manual" ? manual : [
     ...mystery.games,
-    { kind: "supplication", difficulty: "gentle", duaIds: mystery.duaIds },
+    ...(mystery.duaIds.length ? [{ kind: "supplication" as const, difficulty: "gentle" as const, duaIds: mystery.duaIds }] : []),
     ...(mystery.fajr ? [{ kind: "fajr_reminder" as const, difficulty: "gentle" as const }] : []),
   ];
   function changeMode(next: "manual" | "mystery") {
@@ -121,7 +121,7 @@ export function Challenges() {
     if (mode === "mystery") {
       const next: MysterySettings = {
         games: missions.filter((m): m is Mission & { kind: GameplayKind } => GAMEPLAY_KINDS.includes(m.kind as GameplayKind)),
-        duaIds: missions.find(m => m.kind === "supplication")?.duaIds ?? mystery.duaIds,
+        duaIds: missions.find(m => m.kind === "supplication")?.duaIds ?? [],
         fajr: missions.some(m => m.kind === "fajr_reminder"),
       };
       setMystery(next);
@@ -148,7 +148,7 @@ export function Challenges() {
       const index = selected.findIndex(m => m.kind === item.id);
       const mission = selected[index];
       return <Card key={item.id} animated={Platform.OS !== "android"} style={{ borderColor: mission ? c.lavender : c.line }}>
-        <Tap label={item.name} selected={!!mission} disabled={mode === "mystery" && (item.id === "supplication" || (!!mission && missionSupportsRounds(item.id) && mystery.games.length <= 2))} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle" }])}>
+        <Tap label={item.name} selected={!!mission} disabled={mode === "mystery" && !!mission && missionSupportsRounds(item.id) && mystery.games.length <= 2} onPress={() => change(mission ? selected.filter(m => m.kind !== item.id) : [...selected, { kind: item.id, difficulty: "gentle", ...(mode === "mystery" && item.id === "supplication" ? { duaIds: supplications.map(d => d.id) } : {}) }])}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}>
             <ClayMotion name={item.id} size={88} />
             <View style={{ flex: 1, gap: 4 }}><T variant="label">{item.name}</T><T variant="small" style={{ color: c.muted }}>{item.subtitle}</T></View>
@@ -157,14 +157,15 @@ export function Challenges() {
             </View>
           </View>
         </Tap>
-        {mission && <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 12 }}>
+        {(mission || (mode === "mystery" && item.id === "supplication")) && <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 12 }}>
           {item.id === "supplication" && <>
             <T variant="eyebrow" style={{ color: c.muted }}>YOUR DUAS</T>
-            <T variant="small" style={{ color: c.muted }}>Choose one or more. Each keeps its recitation count.</T>
+            <T variant="small" style={{ color: c.muted }}>{mode === "mystery" ? "Optional. Each keeps its recitation count." : "Choose one or more. Each keeps its recitation count."}</T>
             {supplications.map(dua => {
-              const ids = mode === "mystery" ? mystery.duaIds : selectedSupplications(mission.duaIds).map(d => d.id);
+              const ids = mode === "mystery" ? mystery.duaIds : selectedSupplications(mission!.duaIds).map(d => d.id);
               const active = ids.includes(dua.id);
-              return <Tap key={dua.id} label={`Dua: ${dua.title}`} selected={active} disabled={active && ids.length === 1} onPress={() => change(selected.map(m => m.kind === item.id ? { ...m, duaIds: active ? ids.filter(id => id !== dua.id) : [...ids, dua.id] } : m))}>
+              const nextIds = active ? ids.filter(id => id !== dua.id) : [...ids, dua.id];
+              return <Tap key={dua.id} label={`Dua: ${dua.title}`} selected={active} disabled={mode !== "mystery" && active && ids.length === 1} onPress={() => change(mission ? selected.map(m => m.kind === item.id ? { ...m, duaIds: nextIds } : m) : [...selected, { kind: "supplication", difficulty: "gentle", duaIds: nextIds }])}>
                 <View style={{ padding: 12, borderRadius: 14, backgroundColor: c.raised, flexDirection: "row", gap: 10, alignItems: "center" }}>
                   <Icon name={active ? "checkmark-circle" : "ellipse-outline"} color={active ? c.lavender : c.faint} />
                   <View style={{ flex: 1 }}><T variant="label">{dua.title}</T><T variant="small" style={{ color: c.muted }}>{dua.occasion} · {dua.repetitions}×</T></View>
@@ -172,6 +173,7 @@ export function Challenges() {
               </Tap>;
             })}
           </>}
+          {mission && <>
           {missionSupportsRounds(item.id) && <>
           <T variant="eyebrow" style={{ color: c.muted }}>DIFFICULTY</T>
           <View style={{ flexDirection: "row", gap: 10 }}>
@@ -199,6 +201,7 @@ export function Challenges() {
           <Tap label={`Preview ${item.name}`} onPress={() => router.push({ pathname: "/challenge", params: { id: "demo", preview: "1", kind: item.id, difficulty: mission.difficulty, rounds: missionSupportsRounds(item.id) ? String(missionRounds(mission)) : undefined, duaIds: mission.duaIds?.join(",") } })}>
             <T variant="small" style={{ color: c.lavender }}>Try this mission →</T>
           </Tap>
+          </>}
         </View>}
       </Card>;
     })}

@@ -43,9 +43,9 @@ export function validateMystery(settings: MysterySettings) {
       settings.games.some(m => !m || !GAMEPLAY_KINDS.includes(m.kind) || !["gentle", "bright"].includes(m.difficulty) || m.duaIds !== undefined ||
         (m.rounds !== undefined && (!Number.isInteger(m.rounds) || m.rounds < 1 || m.rounds > MAX_MISSION_ROUNDS))))
     throw new Error("Choose at least two different Mystery games with valid difficulty and rounds.");
-  if (!Array.isArray(settings.duaIds) || !settings.duaIds.length || new Set(settings.duaIds).size !== settings.duaIds.length ||
+  if (!Array.isArray(settings.duaIds) || new Set(settings.duaIds).size !== settings.duaIds.length ||
       settings.duaIds.some(id => !supplications.some(d => d.id === id)))
-    throw new Error("Choose at least one morning dua for Mystery Mode.");
+    throw new Error("Choose valid morning duas for Random Pick.");
   if (typeof settings.fajr !== "boolean") throw new Error("Choose a valid Fajr reminder preference.");
 }
 export const MAX_MISSION_ROUNDS = 10;
@@ -142,7 +142,7 @@ export function alarmMissions(alarm: Pick<Alarm, "missions" | "challenge" | "dif
 export function missionSummary(alarm: Pick<Alarm, "missions" | "challenge" | "difficulty" | "missionMode" | "mystery">) {
   if (alarm.missionMode === "mystery") {
     const count = Array.isArray(alarm.mystery?.games) ? alarm.mystery.games.length : 0;
-    return count < 2 ? "Mystery · Repair game selection" : `Mystery · ${count === 2 ? "2" : `2–${Math.min(4, count)}`} random games · Morning duas${alarm.mystery?.fajr ? " · Fajr" : ""}`;
+    return count < 2 ? "Mystery · Repair game selection" : `Mystery · ${count === 2 ? "2" : `2–${Math.min(4, count)}`} random games${alarm.mystery?.duaIds?.length ? " · Morning duas" : ""}${alarm.mystery?.fajr ? " · Fajr" : ""}`;
   }
   const missions = alarmMissions(alarm);
   return missions.length ? missions.map(missionLabel).join(" → ") : "No missions";

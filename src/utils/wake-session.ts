@@ -37,13 +37,17 @@ export function validateWakeSession(_alarm: Alarm, session: WakeSession) {
   if (session.config) validateMystery(session.config);
   const games = session.missions.filter(m => GAMEPLAY_KINDS.includes(m.kind as GameplayKind));
   const ending = session.missions.slice(games.length);
+  // Legacy snapshots and explicit dua recovery still require supplication.
+  // Newly generated snapshots may explicitly configure no duas.
+  const requiresDuas = session.fallback === "duas-only" || !session.config || session.config.duaIds.length > 0;
   if ((session.fallback === "duas-only" ? games.length !== 0 : games.length < 2 || games.length > 4) ||
       session.missions.slice(0, games.length).some(m => !GAMEPLAY_KINDS.includes(m.kind as GameplayKind)) ||
-      ![1, 2].includes(ending.length) || !ending.some(m => m.kind === "supplication" && m.duaIds?.length) ||
+      ending.length > 2 || (requiresDuas && !ending.some(m => m.kind === "supplication" && m.duaIds?.length)) ||
+      (!requiresDuas && ending.some(m => m.kind === "supplication")) ||
       ending.some(m => m.kind !== "supplication" && m.kind !== "fajr_reminder"))
     throw new WakeRoutineError("The saved routine is incomplete. Your alarm will keep ringing.");
   if (session.config) {
-    const ids = ending.find(m => m.kind === "supplication")!.duaIds!;
+    const ids = ending.find(m => m.kind === "supplication")?.duaIds ?? [];
     if (games.some(m => !session.config!.games.some(g => g.kind === m.kind && g.difficulty === m.difficulty && missionRounds(g) === missionRounds(m))) ||
         ids.length !== session.config.duaIds.length || ids.some(id => !session.config!.duaIds.includes(id)) ||
         ending.some(m => m.kind === "fajr_reminder") !== session.config.fajr)

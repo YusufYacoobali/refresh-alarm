@@ -6,11 +6,13 @@ meaning. Mystery configuration lives separately in `mystery`; switching modes
 does not overwrite Manual settings. The storage key and schema version remain
 `daybreak.state.v1` / version 1, with additive optional fields.
 
-Mystery requires 2–6 eligible gameplay missions and at least one morning dua.
+Random Pick requires 2–6 eligible gameplay missions. Morning duas are optional;
+an empty `mystery.duaIds` skips supplication entirely.
 Difficulty and rounds use the existing mission controls and validation. Each
 occurrence selects 2–4 distinct games, shuffles them, and then appends shuffled
 individual duas. Recitation counts come from the existing supplication data.
-Optional Fajr appears immediately before or after supplication. When the gameplay
+Optional Fajr appears immediately before or after selected supplication, or after
+the games when no duas are selected. When the gameplay
 order matches the previous occurrence, swapping two distinct games guarantees a
 different order, even with a constant random source.
 
@@ -78,8 +80,8 @@ available for editing and copying without invalid inactive data disabling the
 working mode. Startup validates core alarm data separately from mission
 configuration, so damaged Mystery choices cannot hide the alarm list or block
 the native handoff. The editor salvages readable settings without enabling
-games from an empty corrupt pool; accepting Mystery still requires two games
-and at least one dua.
+games from an empty corrupt pool; accepting Random Pick still requires at least
+two games. Duas may be left unselected.
 
 Snapshots validate independently of the current edited alarm. When an original
 configuration snapshot exists, game eligibility/difficulty/rounds, dua selection

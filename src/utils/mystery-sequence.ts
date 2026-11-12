@@ -18,7 +18,7 @@ export function generateMysterySequence(settings: MysterySettings, previous: rea
   // offer another ordering. Never reroll a user's difficulty or round count.
   if (games.length === previous.length && games.every((m, i) => m.kind === previous[i]))
     [games[0], games[1]] = [games[1], games[0]];
-  const ending: Mission[] = [{ kind: "supplication", difficulty: "gentle", duaIds: shuffled(settings.duaIds, random) }];
+  const ending: Mission[] = settings.duaIds.length ? [{ kind: "supplication", difficulty: "gentle", duaIds: shuffled(settings.duaIds, random) }] : [];
   if (settings.fajr) ending.splice(random() < .5 ? 0 : 1, 0, { kind: "fajr_reminder", difficulty: "gentle" });
   return [...games, ...ending];
 }

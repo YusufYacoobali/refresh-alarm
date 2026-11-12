@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alarmMissions, copyAlarm, defaultMysterySettings, editableMysterySettings, GAMEPLAY_KINDS, sameAlarmDeliverySettings, validateAlarm, validateMystery, type Alarm, type GameplayKind } from "./alarms";
+import { alarmMissions, copyAlarm, defaultMysterySettings, editableMysterySettings, GAMEPLAY_KINDS, sameAlarmDeliverySettings, validateAlarm, validateMystery, validateMissions, missionSummary, type Alarm, type GameplayKind } from "./alarms";
 import { generateMysterySequence } from "./mystery-sequence";
 import { orderedSupplications, selectedSupplications, supplications } from "./supplications";
 import { cleanWakeData, completeWakeSession, createDuaRecoverySession, resolveMysterySession, sameWakeSession, validateWakeSession, wakeHistory, wakeOccurrenceKey, WakeRoutineError } from "./wake-session";
@@ -71,7 +71,7 @@ test("a repeated gameplay sequence is avoided even with a constant RNG and a two
 test("invalid pools, duplicate games, settings, duas and modes cannot be saved", () => {
   for (const games of [[], settings.games.slice(0, 1), [settings.games[0], settings.games[0]], [{ kind: "supplication", difficulty: "gentle" }], [{ ...settings.games[0], rounds: 11 }, settings.games[1]]])
     assert.throws(() => validateMystery({ ...settings, games } as any));
-  for (const duaIds of [[], ["unknown"], ["waking", "waking"]]) assert.throws(() => validateMystery({ ...settings, duaIds } as any));
+  for (const duaIds of [undefined, ["unknown"], ["waking", "waking"]]) assert.throws(() => validateMystery({ ...settings, duaIds } as any));
   assert.throws(() => validateAlarm({ ...alarm, mystery: undefined }));
   assert.throws(() => validateAlarm({ ...alarm, missionMode: "random" as any }));
   assert.doesNotThrow(() => validateAlarm(alarm));
@@ -208,4 +208,52 @@ test("explicit dua recovery introduces no games and stays stable after settings 
   assert.deepEqual(recovered.missions[1].duaIds, ["protection"]);
   assert.equal(resolveMysterySession(alarm, recovered, { sessionId: "original", reminder: true }, undefined, morning + 60000), recovered);
   assert.deepEqual(wakeHistory(recovered).gameplay, []);
+});
+
+test("Random Pick accepts no duas without changing Set Order or legacy supplication validation", () => {
+  const config = { ...settings, duaIds: [] };
+  assert.doesNotThrow(() => validateMystery(config));
+  assert.doesNotThrow(() => validateAlarm({ ...alarm, mystery: config }));
+  assert.deepEqual(editableMysterySettings(config).duaIds, []);
+  assert.deepEqual(copyAlarm({ ...alarm, mystery: config }, "copy", []).mystery!.duaIds, []);
+  assert.ok(!missionSummary({ ...alarm, mystery: config }).includes("Morning duas"));
+  assert.ok(missionSummary({ ...alarm, mystery: { ...config, fajr: true } }).endsWith("Fajr"));
+  assert.throws(() => validateMissions([{ kind: "supplication", difficulty: "gentle", duaIds: [] }]));
+  assert.deepEqual(selectedSupplications().map(d => d.id), settings.duaIds);
+});
+
+for (const fajr of [false, true]) test(`routines without duas choose distinct games with Fajr ${fajr ? "last" : "omitted"}`, () => {
+  for (let size = 2; size <= 6; size++) {
+    const config = { ...settings, games: settings.games.slice(0, size), duaIds: [], fajr };
+    const before = JSON.stringify(config);
+    for (let seed = 1; seed <= 50; seed++) {
+      const routine = generateMysterySequence(config, [], rng(seed * 9187));
+      const games = routine.filter(m => GAMEPLAY_KINDS.includes(m.kind as GameplayKind));
+      assert.ok(games.length >= 2 && games.length <= Math.min(4, size));
+      assert.equal(new Set(games.map(m => m.kind)).size, games.length);
+      assert.ok(!routine.some(m => m.kind === "supplication"));
+      assert.equal(routine.length, games.length + Number(fajr));
+      if (fajr) assert.equal(routine.at(-1)!.kind, "fajr_reminder");
+      for (const game of games) assert.deepEqual(game, config.games.find(m => m.kind === game.kind));
+    }
+    assert.equal(JSON.stringify(config), before);
+  }
+});
+
+for (const fajr of [false, true]) test(`no-dua snapshots with Fajr ${fajr ? "on" : "off"} survive hydration, timeout and snooze`, () => {
+  const configured = { ...alarm, mystery: { ...settings, games: settings.games.slice(0, 2), duaIds: [], fajr } };
+  const first = resolveMysterySession(configured, undefined, { sessionId: "no-duas" }, undefined, morning, rng(4));
+  const restored = cleanWakeData([configured], JSON.parse(JSON.stringify({ wakeSessions: { test: first } })));
+  assert.deepEqual(restored.wakeSessions.test, first); assert.deepEqual(restored.wakeSessionRecovery, {});
+  assert.equal(resolveMysterySession(configured, first, { sessionId: first.id, reminder: true }, undefined, morning + 60000), first);
+  const snoozed = { alarmId: alarm.id, at: morning + 300000, registration: { kind: "alarmkit" as const, ids: ["snooze"] }, sessionId: first.id };
+  assert.equal(resolveMysterySession(configured, first, { eventId: "snooze:delivery" }, snoozed, snoozed.at), first);
+  const next = resolveMysterySession(configured, first, { sessionId: "tomorrow" }, undefined, morning + 86400000, rng(5));
+  assert.notEqual(next.id, first.id); assert.ok(!next.missions.some(m => m.kind === "supplication"));
+  assert.doesNotThrow(() => validateWakeSession(configured, next));
+  assert.throws(() => validateWakeSession(configured, { ...first, config: undefined }));
+  assert.throws(() => validateWakeSession(configured, { ...first, missions: [...first.missions, { kind: "supplication", difficulty: "gentle" }] }));
+  const existing = resolveMysterySession(alarm, undefined, { sessionId: "with-duas" }, undefined, morning, rng(1));
+  assert.equal(resolveMysterySession(configured, existing, { sessionId: existing.id }, undefined, morning + 60000), existing);
+  assert.throws(() => validateWakeSession(configured, { ...existing, missions: existing.missions.filter(m => m.kind !== "supplication") }));
 });
