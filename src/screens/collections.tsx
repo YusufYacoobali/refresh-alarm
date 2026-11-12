@@ -22,7 +22,6 @@ import {
   IconName,
 } from "@/components/ui";
 import { useApp } from "@/state/app-state";
-import { AlarmSwitch } from "@/components/alarm-switch";
 import { Mission, MysterySettings, GameplayKind, GAMEPLAY_KINDS, defaultMysterySettings, editableMysterySettings, validateMystery, validateMissions, alarmMissions, missionDescription, missionLabel, missionRounds, missionSupportsRounds, MAX_MISSION_ROUNDS, sounds, SoundId } from "@/utils/alarms";
 import { colors as c, art } from "@/theme";
 import { ClayMotion } from "@/components/clay-motion";
@@ -137,23 +136,15 @@ export function Challenges() {
   return <Screen style={{ gap: 22 }} removeClippedSubviews={false}>
     <Heading title="Get past snooze" subtitle="Choose what helps you start your morning." />
     <View style={{ flexDirection: "row", gap: 10 }}>
-      <Chip title="Manual" active={mode === "manual"} onPress={() => changeMode("manual")} />
-      <Chip title="Mystery" active={mode === "mystery"} onPress={() => changeMode("mystery")} />
+      <Chip title="Set Order" active={mode === "manual"} onPress={() => changeMode("manual")} />
+      <Chip title="Random Pick" active={mode === "mystery"} onPress={() => changeMode("mystery")} />
     </View>
-    {mode === "mystery" && <View style={{ gap: 12 }}>
-      <T style={{ color: c.muted }}>Each wake-up chooses 2–4 different games, capped by your pool size, then your shuffled morning duas. Choose at least two games and one dua. Difficulty and rounds stay as you set them.</T>
-      {configError && <T testID="mystery-config-error" accessibilityLiveRegion="polite" style={{ color: c.peach }}>{configError}</T>}
-      <Card animated={Platform.OS !== "android"}><View style={{ padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <T style={{ flex: 1 }}>Include Fajr reminder</T>
-        <AlarmSwitch testID="mystery-fajr" disabled={false} label="Include Fajr reminder" value={mystery.fajr} onValueChange={enabled => change(enabled ? [...selected, { kind: "fajr_reminder", difficulty: "gentle" }] : selected.filter(m => m.kind !== "fajr_reminder"))} />
-      </View></Card>
-      <T variant="small" style={{ color: c.muted }}>Fajr appears immediately before or after your duas. A timeout or snooze keeps the same routine.</T>
-    </View>}
+    {mode === "mystery" && configError && <T testID="mystery-config-error" accessibilityLiveRegion="polite" style={{ color: c.peach }}>{configError}</T>}
     <Card animated={Platform.OS !== "android"} style={{ padding: 16, gap: 8 }}>
       <T variant="eyebrow" style={{ color: c.peach }}>{mode === "mystery" ? `${mystery.games.length} ELIGIBLE GAMES` : selected.length ? `${selected.length} MISSION${selected.length > 1 ? "S" : ""} SELECTED` : "A SIMPLE START"}</T>
       <T style={{ color: c.muted }}>{mode === "mystery" ? mystery.games.map(missionLabel).join(" · ") : selected.length ? selected.map((m, i) => `${i + 1}. ${missionLabel(m)}`).join("  →  ") : "No missions. Dismiss your alarm with a tap."}</T>
     </Card>
-    {challenges.filter(item => mode !== "mystery" || item.id !== "fajr_reminder" || mystery.fajr).map(item => {
+    {challenges.map(item => {
       const index = selected.findIndex(m => m.kind === item.id);
       const mission = selected[index];
       return <Card key={item.id} animated={Platform.OS !== "android"} style={{ borderColor: mission ? c.lavender : c.line }}>
@@ -215,7 +206,7 @@ export function Challenges() {
       <Card animated={Platform.OS !== "android"} style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 12 }}><Icon name="sunny-outline" /><View style={{ flex: 1 }}><T variant="label">No missions</T><T variant="small" style={{ color: c.muted }}>Just tap to dismiss.</T></View>{!selected.length && <Icon name="checkmark-circle" />}</Card>
     </Tap>}
     <T variant="small" style={{ color: c.faint }}>Missions run inside Refresh. Your device’s alarm controls remain available.</T>
-    {editing && <Button title={mode === "mystery" ? "Use Mystery Mode" : selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} disabled={!!configError} onPress={() => router.back()} icon="checkmark" />}
+    {editing && <Button title={mode === "mystery" ? "Use Random Pick" : selected.length ? `Use ${selected.length} mission${selected.length > 1 ? "s" : ""}` : "Use no missions"} disabled={!!configError} onPress={() => router.back()} icon="checkmark" />}
   </Screen>;
 }
 export function Themes() {

@@ -63,30 +63,32 @@ async function changeStored(page: Page, change: (state: any) => void) {
   await page.evaluate(state => localStorage.setItem("daybreak.state.v1", JSON.stringify(state)), state);
 }
 
-test("Manual and Mystery settings remain independent through switching, previews, saving and reload", async ({ page }) => {
+test("Set Order and Random Pick settings remain independent through switching, previews, saving and reload", async ({ page }) => {
   await seed(page, true);
   await page.goto("/alarms");
   await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
-  await expect(page.getByRole("button", { name: "Manual", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Mystery", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Set Order", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
   await expect(page.getByTestId("rounds-math")).toHaveValue("3");
+  await expect(page.getByRole("button", { name: "Fajr reminder", exact: true })).toHaveAttribute("aria-pressed", "false");
   for (const game of ["Memory match", "Number trail", "Tile recall", "Pattern echo"]) await page.getByRole("button", { name: game, exact: true }).click();
   await expect(page.getByRole("button", { name: "Math puzzle", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Shake to wake", exact: true })).toBeDisabled();
   for (const title of ["Contentment in faith", "Seeking protection"]) await page.getByRole("button", { name: `Dua: ${title}`, exact: true }).click();
   await expect(page.getByRole("button", { name: "Dua: Upon waking", exact: true })).toBeDisabled();
-  await page.getByRole("switch", { name: "Include Fajr reminder", exact: true }).click();
+  await page.getByRole("button", { name: "Fajr reminder", exact: true }).click();
+  await expect(page.getByText("2 ELIGIBLE GAMES", { exact: true })).toBeVisible();
   await page.getByTestId("rounds-math").selectOption("4");
   await page.getByRole("button", { name: "Preview Math puzzle", exact: true }).click();
   await expect(page.getByTestId("mission-round")).toHaveText("Round 1 of 4");
   await page.getByRole("button", { name: "Close challenge preview", exact: true }).click();
-  await page.getByRole("button", { name: "Manual", exact: true }).click();
+  await page.getByRole("button", { name: "Set Order", exact: true }).click();
   await expect(page.getByTestId("rounds-math")).toHaveValue("3");
-  await page.getByRole("button", { name: "Mystery", exact: true }).click();
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
   await expect(page.getByTestId("rounds-math")).toHaveValue("4");
-  await page.getByRole("button", { name: "Use Mystery Mode", exact: true }).click();
+  await page.getByRole("button", { name: "Use Random Pick", exact: true }).click();
   await page.getByRole("button", { name: "Save alarm", exact: true }).click();
   await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
   await page.reload();
@@ -97,7 +99,7 @@ test("Manual and Mystery settings remain independent through switching, previews
   await page.getByRole("button", { name: /^Edit alarm at/ }).click();
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
-  await expect(page.getByRole("button", { name: "Mystery", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Random Pick", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("rounds-math")).toHaveValue("4");
 });
 
@@ -360,7 +362,7 @@ test("an empty corrupt pool stays editable and cannot be accepted until two game
   await page.getByRole("button", { name: /Wake-up missions/ }).click();
   await page.getByRole("button", { name: /Choose missions/ }).click();
   await expect(page.getByTestId("mystery-config-error")).toBeVisible();
-  const use = page.getByRole("button", { name: "Use Mystery Mode", exact: true });
+  const use = page.getByRole("button", { name: "Use Random Pick", exact: true });
   await expect(use).toBeDisabled();
   await page.getByRole("button", { name: "Math puzzle", exact: true }).click();
   await expect(use).toBeDisabled();
@@ -394,4 +396,81 @@ test("configuration sections respond on their first tap and repeated opening wit
   await page.getByRole("button", { name: "Select Digital Beep", exact: true }).click();
   await page.getByRole("button", { name: "Use this sound", exact: true }).click();
   await expect(page.getByTestId("alarm-volume")).toHaveValue("65");
+});
+
+test("Fajr is a selectable card in both modes and keeps each mode's saved preferences", async ({ page }) => {
+  await seed(page);
+  await page.goto("/alarms");
+  const original = (await saved(page)).alarms[0];
+  const openPicker = async () => {
+    await page.getByRole("button", { name: /^Edit alarm at/ }).click();
+    await page.getByRole("button", { name: /Wake-up missions/ }).click();
+    await page.getByRole("button", { name: /Choose missions/ }).click();
+  };
+  const fajr = page.getByRole("button", { name: "Fajr reminder", exact: true });
+  await openPicker();
+  await expect(page.getByRole("button", { name: "Random Pick", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(fajr).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("switch", { name: "Include Fajr reminder", exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Each wake-up chooses/)).toHaveCount(0);
+  await expect(page.getByText(/Fajr appears immediately before or after/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Manual", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Mystery", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("rounds-fajr_reminder")).toHaveCount(0);
+  for (const selected of [false, true, false]) {
+    await expect(fajr).toBeEnabled(); await fajr.click();
+    await expect(fajr).toHaveAttribute("aria-pressed", String(selected));
+    await expect(page.getByText("2 ELIGIBLE GAMES", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Math puzzle", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Shake to wake", exact: true })).toBeDisabled();
+  }
+  await page.getByRole("button", { name: "Use Random Pick", exact: true }).click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  await page.reload();
+  expect((await saved(page)).alarms[0].mystery).toEqual({ ...original.mystery, fajr: false });
+  await openPicker();
+  await expect(fajr).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "Set Order", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "false"); await fajr.click();
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "false"); await fajr.click();
+  await page.getByRole("button", { name: "Set Order", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "true"); await fajr.click();
+  await page.getByRole("button", { name: "Set Order", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Use 3 missions", exact: true }).click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  await page.reload();
+  const configured = (await saved(page)).alarms[0];
+  expect(configured.missionMode).toBe("manual");
+  expect(configured.missions).toEqual([...original.missions, { kind: "fajr_reminder", difficulty: "gentle" }]);
+  expect(configured.mystery).toEqual({ ...original.mystery, fajr: false });
+  await openPicker();
+  await expect(page.getByRole("button", { name: "Set Order", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(fajr).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Random Pick", exact: true }).click();
+  await expect(fajr).toHaveAttribute("aria-pressed", "false");
+});
+
+test("new alarms stay in Set Order when choosing Fajr without enabling Random Pick", async ({ page }) => {
+  await seed(page, true);
+  await page.goto("/alarm");
+  await page.getByRole("button", { name: /Wake-up missions/ }).click();
+  await page.getByRole("button", { name: /Choose missions/ }).click();
+  await expect(page.getByRole("button", { name: "Set Order", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Random Pick", exact: true })).toHaveAttribute("aria-pressed", "false");
+  const fajr = page.getByRole("button", { name: "Fajr reminder", exact: true });
+  await expect(fajr).toHaveAttribute("aria-pressed", "false"); await fajr.click();
+  await page.getByRole("button", { name: "Use 1 mission", exact: true }).click();
+  await page.getByRole("button", { name: "Save alarm", exact: true }).click();
+  await expect(page.getByText("Alarm saved. You’re all set.")).toBeVisible();
+  await page.reload();
+  const created = (await saved(page)).alarms.find((a: any) => a.id !== "mystery");
+  expect(created.missionMode ?? "manual").toBe("manual");
+  expect(created.mystery).toBeUndefined();
+  expect(created.missions).toEqual([{ kind: "fajr_reminder", difficulty: "gentle" }]);
 });
