@@ -6,7 +6,9 @@ import { colors as c } from "@/theme";
 import type { AppBlockDisclosureProps } from "./app-block-disclosure";
 
 export function AppBlockDisclosure({ onAgree, onDecline }: AppBlockDisclosureProps) {
-  return <Host colorScheme="dark" seedColor={c.lavender}>
+  // AlertDialog owns its native window; the bridge must not measure a dialog
+  // against an expanding/clipped card or an unbounded ScrollView.
+  return <Host style={{ width: 1, height: 1 }} colorScheme="dark" seedColor={c.lavender}>
     <AlertDialog onDismissRequest={onDecline}
       properties={{ dismissOnBackPress: true, dismissOnClickOutside: true }}
       colors={{ containerColor: c.surface, titleContentColor: c.text, textContentColor: c.text }}>

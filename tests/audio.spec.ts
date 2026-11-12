@@ -66,7 +66,7 @@ test("a real alarm loops its chosen sound through missions and stops on completi
   await expect.poll(() => audio.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThan(0);
   expect(await audio.evaluate(el => (el as HTMLAudioElement).loop)).toBe(true);
   for (let i = 0; i < 3; i++) {
-    await expect(page.getByTestId("math-question")).toHaveText(/^\d+ \+ \d+$/);
+    await expect(page.getByTestId("math-question")).toHaveText(/^\d+ \+ \d+$/, { useInnerText: true });
     const [a, b] = (await page.getByTestId("math-question").innerText()).split("+").map(Number);
     await page.getByRole("button", { name: `Answer ${a + b}`, exact: true }).click();
   }

@@ -156,6 +156,8 @@ class AlarmRingService : Service() {
     val active = AlarmStore.active(this) ?: return
     if (active.optString("eventId") != eventId) return
     active.remove("missionDeadline")
+    // Keep the original wake-up identity when a reminder replaces eventId.
+    if (!active.has("sessionId")) active.put("sessionId", "${active.getString("id")}:${active.optLong("scheduledAt")}")
     active.put("reminder", true).put("eventId", "${active.getString("id")}:reminder:${SystemClock.elapsedRealtime()}")
     AlarmStore.setActive(this, active)
     // Repost the alarm notification to wake a locked screen; the new occurrence

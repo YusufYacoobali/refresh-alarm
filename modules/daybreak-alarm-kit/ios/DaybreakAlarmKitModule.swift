@@ -5,7 +5,6 @@ import SwiftUI
 import AppIntents
 import ActivityKit
 import AVFoundation
-import OSLog
 import FamilyControls
 import UIKit
 
@@ -21,6 +20,8 @@ struct DaybreakAlarmInput: Record {
   @Field var volume: Double? = nil
   @Field var appBlockSelection: String? = nil
   @Field var appBlockMinutes: Int = 5
+  @Field var wakeSessionId: String? = nil
+  @Field var deliveryKind: String = "scheduled"
 }
 
 @available(iOS 26.0, *)
@@ -30,22 +31,32 @@ struct DaybreakMetadata: AlarmMetadata { var alarmId: String }
 @available(iOS 26.0, *)
 public struct OpenDaybreakIntent: LiveActivityIntent {
   public static var title: LocalizedStringResource = "Wake up with Refresh"
-  public static var openAppWhenRun = true
+  public static let supportedModes: IntentModes = [.background, .foreground(.deferred)]
   @Parameter(title: "Alarm") public var alarmId: String
-  public init() { alarmId = "" }
-  public init(alarmId: String) { self.alarmId = alarmId }
+  @Parameter(title: "Registration") public var registrationId: String?
+  public init() { alarmId = ""; registrationId = nil }
+  public init(alarmId: String, registrationId: String) { self.alarmId = alarmId; self.registrationId = registrationId }
   public func perform() async throws -> some IntentResult {
-    UserDefaults.standard.set(alarmId, forKey: "daybreak.pendingAlarm")
+    let registrationId = registrationId ?? ""
+    DaybreakWakeHandoff.log("intent.stop.begin", id: registrationId)
+    do { try DaybreakWakeHandoff.record(registrationId: registrationId, alarmId: alarmId, source: "stop") }
+    catch { DaybreakWakeHandoff.log("intent.stop.failed", id: registrationId, reason: "persistence"); throw error }
+    // Deferred mode requests foregrounding only after the durable write.
+    DaybreakWakeHandoff.log("intent.stop.complete", id: registrationId)
     return .result()
   }
 }
 
+@available(iOS 26.0, *)
+public struct DaybreakAlarmIntentsPackage: AppIntentsPackage {}
+
 public class DaybreakAlarmKitModule: Module {
   private var alarmUpdatesTask: Task<Void, Never>?
-  private static let timingLog = Logger(subsystem: "com.yacoobali.alarm", category: "AlarmTiming")
+  private var handoffObservers: [NSObjectProtocol] = []
 
   public func definition() -> ModuleDefinition {
     Name("DaybreakAlarmKit")
+    Function("wakeHandoffVersion") { 1 }
     Function("soundVolumeVersion") { 1 }
     Function("appBlockVersion") { 2 }
     Function("appBlockStatus") { () -> [String: Any] in
@@ -77,12 +88,22 @@ public class DaybreakAlarmKitModule: Module {
     Events("onAlarmStateChange")
     OnCreate { [weak self] in
       guard #available(iOS 26.0, *) else { return }
+      DaybreakWakeHandoff.log("app.created")
+      for name in [DaybreakWakeHandoff.changed, UIApplication.didBecomeActiveNotification, UIApplication.willEnterForegroundNotification] {
+        let observer = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+          if note.name != DaybreakWakeHandoff.changed { DaybreakWakeHandoff.log("app.resume") }
+          self?.sendEvent("onAlarmStateChange", [:])
+        }
+        self?.handoffObservers.append(observer)
+      }
       self?.alarmUpdatesTask = Task { [weak self] in
         for await alarms in AlarmManager.shared.alarmUpdates {
           if Task.isCancelled { break }
           for alarm in alarms where alarm.state == .alerting {
+            do { try DaybreakWakeHandoff.record(registrationId: alarm.id.uuidString.lowercased(), source: "alerting") }
+            catch { DaybreakWakeHandoff.log("handoff.write.failed", reason: "alerting") }
             RefreshAppBlockShared.refresh(RefreshAppBlockShared.prefix + alarm.id.uuidString.lowercased())
-            Self.timingLog.notice("AlarmKit alert observed id=\(alarm.id.uuidString, privacy: .public) at=\(Date().timeIntervalSince1970, privacy: .public)")
+            DaybreakWakeHandoff.log("alarm.alerting", id: alarm.id.uuidString.lowercased())
           }
           self?.sendEvent("onAlarmStateChange", [:])
         }
@@ -91,6 +112,8 @@ public class DaybreakAlarmKitModule: Module {
     OnDestroy { [weak self] in
       self?.alarmUpdatesTask?.cancel()
       self?.alarmUpdatesTask = nil
+      self?.handoffObservers.forEach { NotificationCenter.default.removeObserver($0) }
+      self?.handoffObservers = []
     }
     AsyncFunction("prepareCustomSound") { (uri: String, value: String) throws -> String in
       guard let id = UUID(uuidString: value), let url = URL(string: uri), url.isFileURL else { throw Self.error("Invalid imported audio file.") }
@@ -124,6 +147,7 @@ public class DaybreakAlarmKitModule: Module {
     AsyncFunction("schedule") { (input: DaybreakAlarmInput) async throws in
       guard #available(iOS 26.0, *) else { throw Self.error("AlarmKit requires iOS 26 or later.") }
       guard let id = UUID(uuidString: input.id), (0...23).contains(input.hour), (0...59).contains(input.minute), input.days.allSatisfy({ (0...6).contains($0) }) else { throw Self.error("Invalid alarm schedule.") }
+      guard ["scheduled", "snooze", "timeout"].contains(input.deliveryKind) else { throw Self.error("Invalid alarm delivery.") }
       guard AlarmManager.shared.authorizationState == .authorized else { throw Self.error("Allow Refresh alarms in Settings before scheduling.") }
       let schedule: Alarm.Schedule
       if let timestamp = input.timestamp {
@@ -168,7 +192,7 @@ public class DaybreakAlarmKitModule: Module {
       // stopping the system sound must not mark the app's mission complete.
       let configuration = AlarmManager.AlarmConfiguration<DaybreakMetadata>.alarm(
         schedule: schedule, attributes: attributes,
-        stopIntent: OpenDaybreakIntent(alarmId: input.alarmId),
+        stopIntent: OpenDaybreakIntent(alarmId: input.alarmId, registrationId: id.uuidString.lowercased()),
         sound: sound
       )
       if let selection = input.appBlockSelection {
@@ -176,45 +200,71 @@ public class DaybreakAlarmKitModule: Module {
         let fixed = input.timestamp ?? (input.days.isEmpty ? calendar.nextDate(after: Date(), matching: DateComponents(hour: input.hour, minute: input.minute, second: 0), matchingPolicy: .nextTime)?.timeIntervalSince1970 : nil)
         try RefreshAppBlockShared.schedule(id: id.uuidString.lowercased(), record: RefreshAppBlockRecord(hour: input.hour, minute: input.minute, days: input.days, timestamp: fixed, selection: selection, minutes: input.appBlockMinutes))
       }
+      try DaybreakWakeHandoff.register(id.uuidString.lowercased(), schedule: .init(alarmId: input.alarmId, hour: input.hour, minute: input.minute,
+        days: input.days, timestamp: input.timestamp, sessionId: input.wakeSessionId, kind: input.deliveryKind))
       do { _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration) }
       catch { RefreshAppBlockShared.cancel(id: id.uuidString.lowercased()); throw error }
-      Self.timingLog.notice("AlarmKit scheduled id=\(id.uuidString, privacy: .public) hour=\(input.hour) minute=\(input.minute) fixed=\(input.timestamp ?? 0) timezone=\(TimeZone.current.identifier, privacy: .public) savedAt=\(Date().timeIntervalSince1970, privacy: .public)")
+      DaybreakWakeHandoff.log("alarm.scheduled", id: id.uuidString.lowercased(), reason: input.deliveryKind)
     }
     AsyncFunction("cancel") { (value: String) throws in
       guard #available(iOS 26.0, *), let id = UUID(uuidString: value) else { return }
       if try AlarmManager.shared.alarms.contains(where: { $0.id == id }) { try AlarmManager.shared.cancel(id: id) }
+      try DaybreakWakeHandoff.cancelSchedule(id.uuidString.lowercased())
       RefreshAppBlockShared.cancel(id: id.uuidString.lowercased())
     }
     AsyncFunction("stop") { (value: String) throws in
       guard #available(iOS 26.0, *), let id = UUID(uuidString: value) else { return }
       if try AlarmManager.shared.alarms.contains(where: { $0.id == id && $0.state == .alerting }) {
-        Self.timingLog.notice("AlarmKit stop requested id=\(id.uuidString, privacy: .public) at=\(Date().timeIntervalSince1970, privacy: .public)")
+        DaybreakWakeHandoff.log("alarm.stop.requested", id: id.uuidString.lowercased())
         try AlarmManager.shared.stop(id: id)
       }
     }
     AsyncFunction("getAlarms") { () throws -> [[String: String]] in
       guard #available(iOS 26.0, *) else { return [] }
       return try AlarmManager.shared.alarms.map { alarm in
-        ["id": alarm.id.uuidString.lowercased(), "state": alarm.state == .alerting ? "alerting" : "scheduled"]
+        ["id": alarm.id.uuidString.lowercased(), "alarmId": try DaybreakWakeHandoff.alarmId(for: alarm.id.uuidString.lowercased()) ?? "",
+         "state": alarm.state == .alerting ? "alerting" : "scheduled"]
       }
     }
-    Function("consumePendingAlarm") { () -> String? in
-      let value = UserDefaults.standard.string(forKey: "daybreak.pendingAlarm")
-      UserDefaults.standard.removeObject(forKey: "daybreak.pendingAlarm")
-      return value
+    AsyncFunction("pendingWakeups") { () throws -> [[String: Any]] in
+      let pending = try DaybreakWakeHandoff.pending()
+      guard #available(iOS 26.0, *) else { return pending.map { $0.dictionary } }
+      do {
+        for alarm in try AlarmManager.shared.alarms where alarm.state == .alerting {
+          try DaybreakWakeHandoff.record(registrationId: alarm.id.uuidString.lowercased(), source: "alerting")
+        }
+      } catch {
+        if pending.isEmpty { throw error }
+        DaybreakWakeHandoff.log("handoff.observe.deferred", reason: "native_read_failed")
+      }
+      return try DaybreakWakeHandoff.pending().map { $0.dictionary }
     }
+    AsyncFunction("adoptWakeup") { (occurrenceId: String, sessionId: String) throws in try DaybreakWakeHandoff.adopt(occurrenceId, sessionId: sessionId) }
+    AsyncFunction("captureAlertingWakeup") { (registrationId: String, alarmId: String) throws in
+      guard #available(iOS 26.0, *), let id = UUID(uuidString: registrationId),
+            try AlarmManager.shared.alarms.contains(where: { $0.id == id && $0.state == .alerting }) else { return }
+      try DaybreakWakeHandoff.record(registrationId: registrationId, alarmId: alarmId, source: "alerting")
+    }
+    AsyncFunction("deferWakeup") { (sessionId: String) throws in try DaybreakWakeHandoff.deferSession(sessionId) }
+    AsyncFunction("completeWakeup") { (sessionId: String, reason: String) throws in try DaybreakWakeHandoff.complete(sessionId, reason: reason) }
+    Function("activeWakeup") { (alarmId: String) throws -> [String: Any]? in
+      try DaybreakWakeHandoff.pending().first(where: { $0.alarmId == alarmId && !$0.deferred })?.dictionary
+    }
+    Function("logWakeHandoff") { (event: String, id: String, reason: String) in DaybreakWakeHandoff.log(event, id: id, reason: reason) }
+    // Compatibility reads are deliberately non-destructive too.
+    Function("consumePendingAlarm") { () throws -> String? in try DaybreakWakeHandoff.pending().first(where: { !$0.deferred })?.alarmId }
     // Keep the handoff durable until the app successfully completes the alarm.
     // Reading it on launch/resume must not lose an unfinished wake-up session.
-    Function("activeAlarm") { () -> String? in
-      UserDefaults.standard.string(forKey: "daybreak.pendingAlarm")
+    Function("activeAlarm") { () throws -> String? in
+      try DaybreakWakeHandoff.pending().first(where: { !$0.deferred })?.alarmId
     }
     Function("beginAlarm") { (alarmId: String) in
       _ = RefreshAppBlockShared.refreshAll()
-      UserDefaults.standard.set(alarmId, forKey: "daybreak.pendingAlarm")
+      // Old JavaScript can resume existing evidence, but cannot overwrite it.
     }
-    Function("completeAlarm") { (alarmId: String) in
-      if UserDefaults.standard.string(forKey: "daybreak.pendingAlarm") == alarmId {
-        UserDefaults.standard.removeObject(forKey: "daybreak.pendingAlarm")
+    Function("completeAlarm") { (alarmId: String) throws in
+      if let first = try DaybreakWakeHandoff.pending().first(where: { $0.alarmId == alarmId }) {
+        try DaybreakWakeHandoff.complete(first.sessionId, reason: "completed")
       }
     }
   }

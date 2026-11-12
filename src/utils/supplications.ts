@@ -42,3 +42,8 @@ export function selectedSupplications(ids?: readonly string[]) {
   const selected = supplications.filter(dua => ids?.includes(dua.id));
   return selected.length ? selected : [...supplications];
 }
+/** Generated Mystery routines retain the persisted individual dua order. */
+export function orderedSupplications(ids?: readonly string[]) {
+  if (!ids?.length) return [...supplications];
+  return ids.flatMap(id => supplications.filter(dua => dua.id === id));
+}

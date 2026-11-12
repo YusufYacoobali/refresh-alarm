@@ -4,7 +4,9 @@ test("custom Lottie plays offline and responds to reduced motion and app visibil
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/challenge?id=demo&preview=1&kind=math");
+  // Mission illustrations live in the selection screen; gameplay uses its
+  // compact controls. Exercise the same bundled Lottie where it is rendered.
+  await page.goto("/challenges");
   const scene = page.locator('[data-motion="math"]');
   await expect(scene).toHaveAttribute("data-playing", "true");
   const svg = scene.locator("svg");

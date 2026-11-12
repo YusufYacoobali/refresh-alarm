@@ -60,6 +60,7 @@ export async function scheduleAlarm(
   alarm: Alarm,
   at?: Date,
   reuse?: Registration,
+  wake?: { sessionId?: string; kind: "snooze" | "timeout" },
 ): Promise<Registration> {
   const label = ALARM_NAMING_ENABLED ? alarm.label : "Refresh alarm";
   if (Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 26 && !alarmKitAvailable())
@@ -120,6 +121,8 @@ export async function scheduleAlarm(
       label,
       soundName: soundFile(alarm.sound),
       volume: alarm.volume,
+      wakeSessionId: wake?.sessionId,
+      deliveryKind: wake?.kind ?? "scheduled",
       appBlockSelection: alarm.appBlock?.enabled ? alarm.appBlock.selection : undefined,
       appBlockMinutes: alarm.appBlock?.enabled ? alarm.appBlock.minutes ?? 5 : undefined,
       ...(at ? { timestamp: at.getTime() / 1000 } : {}),
@@ -183,9 +186,9 @@ export async function stopAlarm(alarm: Alarm) {
   if (Platform.OS === "android" && AndroidAlarm) await AndroidAlarm.stop(alarm.id);
   if (alarm.registration?.kind === "alarmkit" && AlarmKit) {
     const active = await AlarmKit.getAlarms();
-    for (const id of alarm.registration.ids)
-      if (active.some((a) => a.id === id && a.state === "alerting"))
-        await AlarmKit.stop(id);
+    for (const delivery of active)
+      if (delivery.state === "alerting" && (delivery.alarmId === alarm.id || alarm.registration.ids.includes(delivery.id)))
+        await AlarmKit.stop(delivery.id);
   }
   if (Platform.OS !== "web") await Notifications.dismissAllNotificationsAsync();
 }

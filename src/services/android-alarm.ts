@@ -10,7 +10,7 @@ type AndroidAlarmBridge = {
   openSettings(kind: "exact" | "fullScreen" | "channel"): Promise<void>;
   schedule(json: string): Promise<void>;
   cancel(id: string): Promise<void>;
-  activeAlarm(): { alarmId: string; eventId: string } | null;
+  activeAlarm(): { alarmId: string; eventId: string; sessionId?: string } | null;
   stop(alarmId: string): Promise<void>;
   setMissionSilenced(eventId: string, silent: boolean): Promise<void>;
   missionActivity(eventId: string): Promise<void>;

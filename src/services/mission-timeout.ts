@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alarm, Registration } from "@/utils/alarms";
 import { alarmKitAvailable, cancelRegistration, scheduleAlarm } from "./scheduler";
+import AlarmKit from "./alarm-kit";
 
-export type MissionTimeout = { token: string; alarmId: string; deadline: number; registration: Registration; superseded?: Registration[] };
+export type MissionTimeout = { token: string; alarmId: string; deadline: number; sessionId?: string; registration: Registration; superseded?: Registration[] };
 const KEY = "daybreak.mission-timeout.v1";
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -18,13 +19,13 @@ export async function readMissionTimeout(): Promise<MissionTimeout | null> {
   return saved ? JSON.parse(saved) as MissionTimeout : null;
 }
 
-export function startMissionTimeout(alarm: Alarm, deadline: number, token: string) {
+export function startMissionTimeout(alarm: Alarm, deadline: number, token: string, sessionId?: string) {
   if (!alarmKitAvailable()) return Promise.resolve();
   return enqueue(async () => {
     const previous = await readMissionTimeout();
-    const registration = await scheduleAlarm(alarm, new Date(deadline));
+    const registration = await scheduleAlarm(alarm, new Date(deadline), undefined, { sessionId, kind: "timeout" });
     const superseded = previous ? [previous.registration, ...(previous.superseded ?? [])] : [];
-    const record: MissionTimeout = { token, alarmId: alarm.id, deadline, registration, superseded };
+    const record: MissionTimeout = { token, alarmId: alarm.id, deadline, sessionId, registration, superseded };
     try {
       await AsyncStorage.setItem(KEY, JSON.stringify(record));
     } catch (error) {
@@ -38,10 +39,14 @@ export function startMissionTimeout(alarm: Alarm, deadline: number, token: strin
   });
 }
 
-export function cancelMissionTimeout(token?: string) {
+export function cancelMissionTimeout(token?: string, preserveAlerting = false) {
   return enqueue(async () => {
     const current = await readMissionTimeout();
     if (!current || (token && current.token !== token)) return;
+    if (preserveAlerting && current.registration.kind === "alarmkit" && AlarmKit) {
+      const native = await AlarmKit.getAlarms();
+      if (native.some(a => a.state === "alerting" && current.registration.ids.includes(a.id))) return;
+    }
     await cancelRegistration(current.registration);
     for (const old of current.superseded ?? []) await cancelRegistration(old);
     await AsyncStorage.removeItem(KEY);

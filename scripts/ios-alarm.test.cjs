@@ -121,7 +121,7 @@ test('older iOS fallback preserves 7:20 and requests time-sensitive delivery', a
   assert.equal(require('../app.json').expo.ios.entitlements['com.apple.developer.usernotifications.time-sensitive'], true);
 });
 
-function handoff(state, cancel = async () => {}) {
+function handoff(state, getAlarms = async () => []) {
   let effect, resume, retry, cleanup;
   const calls = [];
   const app = { currentState: state, addEventListener: (_name, listener) => { resume = listener; return { remove() {} }; } };
@@ -131,29 +131,38 @@ function handoff(state, cancel = async () => {}) {
     'expo-router': { useFocusEffect: fn => { effect = fn; } },
     'react-native': { AppState: app, Platform: { OS: 'ios' } },
     '@/utils/sounds': { resolveSoundId: id => id },
-    '@/services/scheduler': { stopAlarm: async () => { calls.push('stop-native'); } },
+    '@/services/alarm-kit': { isSupported: () => true, getAlarms },
     './use-sound-player': { useSoundPlayer: () => ({ play: async () => { calls.push('play'); }, stop: () => {}, playing: null, error: null }) },
     './ui': {}, '@/services/android-alarm': null,
-    '@/services/mission-timeout': { cancelMissionTimeout: cancel },
   }, { setInterval: fn => { retry = fn; return 1; }, clearInterval() {} });
   component.AlarmSound({ alarm, preview: false, ringing: true });
   cleanup = effect();
   return { calls, cleanup, app, resume: () => resume(), retry: () => retry() };
 }
-test('inactive/locked iOS leaves the system alarm audible until the app becomes active', async () => {
+test('inactive/locked iOS starts foreground playback only after the app becomes active', async () => {
   for (const state of ['inactive', 'background']) {
     const h = handoff(state);
     await flush(); h.retry(); await flush();
     assert.deepEqual(h.calls, []);
     h.app.currentState = 'active'; h.resume(); await flush();
-    assert.deepEqual(h.calls, ['stop-native', 'play']);
+    assert.deepEqual(h.calls, ['play']);
     h.cleanup();
   }
 });
-test('backgrounding during asynchronous handoff setup does not stop the system alarm', async () => {
+test('backgrounding during asynchronous native lookup does not start foreground playback', async () => {
   let release;
-  const h = handoff('active', () => new Promise(resolve => { release = resolve; }));
+  const h = handoff('active', () => new Promise(resolve => { release = () => resolve([]); }));
   h.app.currentState = 'background'; release(); await flush();
   assert.deepEqual(h.calls, []);
+  h.cleanup();
+});
+
+test('mounting and resuming a ringing screen never stops or overlaps an alerting native delivery', async () => {
+  let alerting = true;
+  const h = handoff('active', async () => alerting ? [{ id: 'snoozed-registration', alarmId: alarm.id, state: 'alerting' }] : []);
+  await flush(); h.retry(); await flush(); h.resume(); await flush();
+  assert.deepEqual(h.calls, []);
+  alerting = false; h.retry(); await flush();
+  assert.deepEqual(h.calls, ['play']);
   h.cleanup();
 });

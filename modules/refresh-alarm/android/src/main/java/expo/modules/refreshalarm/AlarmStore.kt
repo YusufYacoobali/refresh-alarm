@@ -70,7 +70,8 @@ object AlarmStore {
   @Synchronized fun fire(c: Context, id: String): JSONObject? {
     val alarm = get(c, id) ?: return null
     if (alarm.optLong("scheduledAt") > System.currentTimeMillis() + 1500) return null
-    val active = JSONObject(alarm.toString()).put("eventId", "$id:${alarm.optLong("scheduledAt")}")
+    val occurrenceId = "$id:${alarm.optLong("scheduledAt")}"
+    val active = JSONObject(alarm.toString()).put("eventId", occurrenceId).put("sessionId", occurrenceId)
       .put("receivedAt", System.currentTimeMillis())
     android.util.Log.i("RefreshAlarm", "scheduledAt=${alarm.optLong("scheduledAt")} receivedAt=${active.getLong("receivedAt")}")
     setActive(c, active)

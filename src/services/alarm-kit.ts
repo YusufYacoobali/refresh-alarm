@@ -1,5 +1,14 @@
 import { requireOptionalNativeModule } from "expo";
+import type { NativeWakeHandoff } from "@/utils/wake-handoff";
 export type AlarmKitBridge = {
+  wakeHandoffVersion?(): number;
+  pendingWakeups?(): Promise<NativeWakeHandoff[]>;
+  activeWakeup?(alarmId: string): NativeWakeHandoff | null;
+  adoptWakeup?(occurrenceId: string, sessionId: string): Promise<void>;
+  captureAlertingWakeup?(registrationId: string, alarmId: string): Promise<void>;
+  deferWakeup?(sessionId: string): Promise<void>;
+  completeWakeup?(sessionId: string, reason: "completed" | "deleted" | "cancelled"): Promise<void>;
+  logWakeHandoff?(event: string, id: string, reason: string): void;
   soundVolumeVersion?(): number;
   appBlockVersion?(): number;
   appBlockStatus?(): { authorized: boolean; activeUntil: number };
@@ -21,6 +30,8 @@ export type AlarmKitBridge = {
     timestamp?: number;
     appBlockSelection?: string;
     appBlockMinutes?: number;
+    wakeSessionId?: string;
+    deliveryKind?: "scheduled" | "snooze" | "timeout";
   }): Promise<void>;
   cancel(id: string): Promise<void>;
   stop(id: string): Promise<void>;
@@ -29,6 +40,6 @@ export type AlarmKitBridge = {
   beginAlarm?(alarmId: string): void;
   completeAlarm?(alarmId: string): void;
   addListener?(event: "onAlarmStateChange", listener: () => void): { remove(): void };
-  getAlarms(): Promise<{ id: string; state: string }[]>;
+  getAlarms(): Promise<{ id: string; alarmId?: string; state: string }[]>;
 };
 export default requireOptionalNativeModule<AlarmKitBridge>("DaybreakAlarmKit");

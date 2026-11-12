@@ -42,7 +42,7 @@ test("a scheduled one-off rings with one action and is disabled on completion", 
   ).toBeVisible();
   await page.clock.fastForward(60000);
   await expect(
-    page.getByTestId("alarm-wallpaper-screen").getByText("Scheduled morning", { exact: true }),
+    page.getByTestId("alarm-wallpaper-screen").getByText("8:00", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /Snooze/ })).toHaveCount(0);
   await page
